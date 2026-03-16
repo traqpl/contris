@@ -52,40 +52,89 @@
     { ogg: 'music_3.ogg', mp3: 'music_3.mp3' },
     { ogg: 'music_4.ogg', mp3: 'music_4.mp3' },
   ];
-  let currentTrack = 0;
+  const lastTrackStorageKey = 'cargo-shift-last-track';
+  let currentTrack = -1;
   let musicStarted = false;
+  let playbackQueue = [];
 
-  function randomTrackIndex(excludedIndex) {
-    if (playlist.length <= 1) {
+  function randomInt(maxExclusive) {
+    if (maxExclusive <= 1) {
       return 0;
     }
-    if (excludedIndex < 0 || excludedIndex >= playlist.length) {
-      return Math.floor(Math.random() * playlist.length);
+    if (window.crypto && window.crypto.getRandomValues) {
+      const values = new Uint32Array(1);
+      window.crypto.getRandomValues(values);
+      return values[0] % maxExclusive;
     }
-    return (excludedIndex + 1 + Math.floor(Math.random() * (playlist.length - 1))) % playlist.length;
+    return Math.floor(Math.random() * maxExclusive);
+  }
+
+  function refillPlaybackQueue(lastTrack) {
+    playbackQueue = playlist.map((_, index) => index);
+    for (let i = playbackQueue.length - 1; i > 0; i -= 1) {
+      const j = randomInt(i + 1);
+      [playbackQueue[i], playbackQueue[j]] = [playbackQueue[j], playbackQueue[i]];
+    }
+
+    if (playbackQueue.length > 1 && playbackQueue[0] === lastTrack) {
+      const swapIndex = 1 + randomInt(playbackQueue.length - 1);
+      [playbackQueue[0], playbackQueue[swapIndex]] = [playbackQueue[swapIndex], playbackQueue[0]];
+    }
+  }
+
+  function nextTrackIndex() {
+    if (playlist.length === 0) {
+      return -1;
+    }
+    if (playbackQueue.length === 0) {
+      refillPlaybackQueue(currentTrack);
+    }
+    return playbackQueue.shift();
+  }
+
+  function preferredTrackUrl(track) {
+    if (!track) {
+      return '';
+    }
+    const canPlayOgg = typeof bgMusic.canPlayType === 'function'
+      && bgMusic.canPlayType('audio/ogg; codecs=opus') !== '';
+    if (canPlayOgg && track.ogg) {
+      return track.ogg;
+    }
+    return track.mp3 || track.ogg || '';
   }
 
   function loadTrack(index) {
-    bgMusic.innerHTML = '';
-    const track = playlist[index];
-    if (track.ogg) {
-      const s = document.createElement('source');
-      s.src = track.ogg;
-      s.type = 'audio/ogg; codecs=opus';
-      bgMusic.appendChild(s);
+    if (index < 0 || index >= playlist.length) {
+      return;
     }
-    const s = document.createElement('source');
-    s.src = track.mp3;
-    s.type = 'audio/mpeg';
-    bgMusic.appendChild(s);
+    const track = playlist[index];
+    const url = preferredTrackUrl(track);
+    if (!url) {
+      return;
+    }
+    bgMusic.pause();
+    bgMusic.removeAttribute('src');
+    bgMusic.innerHTML = '';
+    bgMusic.src = url;
     bgMusic.load();
+    try {
+      window.localStorage.setItem(lastTrackStorageKey, String(index));
+    } catch (_) {}
   }
 
-  currentTrack = randomTrackIndex(-1);
+  try {
+    const storedLastTrack = Number.parseInt(window.localStorage.getItem(lastTrackStorageKey) || '', 10);
+    if (!Number.isNaN(storedLastTrack)) {
+      currentTrack = storedLastTrack;
+    }
+  } catch (_) {}
+
+  currentTrack = nextTrackIndex();
   loadTrack(currentTrack);
 
   bgMusic.addEventListener('ended', () => {
-    currentTrack = randomTrackIndex(currentTrack);
+    currentTrack = nextTrackIndex();
     loadTrack(currentTrack);
     bgMusic.play().catch(() => {});
   });

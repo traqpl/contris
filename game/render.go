@@ -724,35 +724,17 @@ func (e *Engine) renderSidebar() {
 
 	sepLine(10)
 
-	// ── Rules + Keys — przypięte do dołu ─────────────────────────────────
-	rules := []struct{ c, t string }{
-		{"#4ab87a", "mono+green  = 400"},
-		{"#c0b030", "mono+yellow = 200"},
-		{"#6aa0cc", "mix+green   = 150"},
-		{"#88b878", "mix+yellow  =  80"},
-		{"#cc4444", "red → row stays"},
-		{"#d08030", "⚠+⚠(diag) = bomb"},
-		{"#30d0d0", "❄×3(diag) = chain"},
-	}
+	// ── Keys — przypięte do dołu ─────────────────────────────────────────
 	keys := []string{"← →  move", "↑  rotate", "↓  speed up", "SPACE  drop", "P / ESC  pause"}
 
-	ruleH := 19.0
 	keyH := 18.0
 	sideBottom := boardY + float64(ROWS)*CELL
-	blockH := float64(len(rules))*ruleH + 12 + float64(len(keys))*keyH
+	blockH := float64(len(keys)) * keyH
 	ry := sideBottom - blockH
 	if ry < y {
 		ry = y
 	}
 	y = ry
-
-	for _, r := range rules {
-		e.ctx.Set("fillStyle", r.c)
-		e.text(r.t, x+6, y+14, 16, "left")
-		y += ruleH
-	}
-
-	sepLine(6)
 
 	e.ctx.Set("fillStyle", "#607888")
 	for _, k := range keys {
@@ -875,19 +857,34 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 	for layer := 0; layer < e.completedShipLayers; layer++ {
 		layerY := stackBottom - float64(layer+1)*layerH
 
-		e.ctx.Set("fillStyle", "#1e3a28")
+		e.ctx.Set("fillStyle", "#a94710")
 		e.ctx.Call("fillRect", shipLeft+0.5, layerY+0.5, shipW-1, layerH-1)
 
-		e.ctx.Set("strokeStyle", "rgba(60,130,80,0.2)")
+		e.ctx.Set("fillStyle", "rgba(255,190,120,0.16)")
+		e.ctx.Call("fillRect", shipLeft+0.5, layerY+0.5, shipW-1, math.Max(1, layerH*0.12))
+
+		e.ctx.Set("strokeStyle", "rgba(55,18,5,0.65)")
+		e.ctx.Set("lineWidth", 0.8)
+		e.ctx.Call("strokeRect", shipLeft+0.5, layerY+0.5, shipW-1, layerH-1)
+
+		e.ctx.Set("strokeStyle", "rgba(70,24,8,0.36)")
 		e.ctx.Set("lineWidth", 0.5)
 		for c := 0; c < COLS; c++ {
 			cx := shipLeft + float64(c)*cellW
 			e.ctx.Call("strokeRect", cx+0.5, layerY+0.5, cellW-1, layerH-1)
+
+			ribInsetX := math.Max(1, cellW*0.18)
+			e.ctx.Set("fillStyle", "rgba(35,10,2,0.22)")
+			e.ctx.Call("fillRect", cx+ribInsetX, layerY+1, 0.6, layerH-2)
+			e.ctx.Call("fillRect", cx+cellW-ribInsetX, layerY+1, 0.6, layerH-2)
+			e.ctx.Set("fillStyle", "rgba(255,210,170,0.08)")
+			e.ctx.Call("fillRect", cx+ribInsetX+0.8, layerY+1, 0.5, layerH-2)
+			e.ctx.Call("fillRect", cx+cellW-ribInsetX+0.8, layerY+1, 0.5, layerH-2)
 		}
 	}
 
 	if e.completedShipLayers > 0 {
-		e.ctx.Set("strokeStyle", "rgba(100,210,140,0.35)")
+		e.ctx.Set("strokeStyle", "rgba(255,184,96,0.42)")
 		e.ctx.Set("lineWidth", 1)
 		for layer := 1; layer < e.completedShipLayers; layer++ {
 			sepY := stackBottom - float64(layer)*layerH
