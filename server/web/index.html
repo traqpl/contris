@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CARGO SHIFT</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preload" href="music.ogg" as="audio" type="audio/ogg" crossorigin>
+</head>
+<body>
+<div class="crt theme-amber monitor" id="monitor">
+
+  <div class="toolbar">
+    <span class="toolbar-title">◈ CARGO SHIFT</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <label id="hdrLabel" class="hdr-toggle" title="High Dynamic Range — wymaga wyświetlacza HDR">
+        <input type="checkbox" id="hdrCheck">
+        <span id="hdrBadge" class="hdr-badge">HDR</span>
+      </label>
+      <button id="muteBtn" class="mute-btn" title="Mute / Unmute music">♫</button>
+      <label for="themeSelect" class="toolbar-label">THEME</label>
+      <select id="themeSelect" class="theme-select">
+        <option value="theme-amber" selected>AMBER</option>
+        <option value="theme-green">GREEN</option>
+        <option value="theme-cyan">CYAN</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="gameCanvas" width="490" height="692"></canvas>
+    <div id="loading">LOADING...</div>
+  </div>
+
+  <div class="footer">CARGO SHIFT &nbsp;·&nbsp; 2026</div>
+
+</div>
+
+<audio id="bgMusic" preload="auto">
+  <source src="music.ogg" type="audio/ogg; codecs=opus">
+  <source src="music.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+  const bgMusic = document.getElementById('bgMusic');
+  const muteBtn = document.getElementById('muteBtn');
+  bgMusic.volume = 0.4;
+
+  const playlist = [
+    { ogg: 'music.ogg', mp3: 'music.mp3' },
+    { ogg: 'music_2.ogg', mp3: 'music_2.mp3' },
+  ];
+  let currentTrack = 0;
+  let musicStarted = false;
+
+  function loadTrack(index) {
+    bgMusic.innerHTML = '';
+    const track = playlist[index];
+    if (track.ogg) {
+      const s = document.createElement('source');
+      s.src = track.ogg;
+      s.type = 'audio/ogg; codecs=opus';
+      bgMusic.appendChild(s);
+    }
+    const s = document.createElement('source');
+    s.src = track.mp3;
+    s.type = 'audio/mpeg';
+    bgMusic.appendChild(s);
+    bgMusic.load();
+  }
+
+  bgMusic.addEventListener('ended', () => {
+    currentTrack = (currentTrack + 1) % playlist.length;
+    loadTrack(currentTrack);
+    bgMusic.play().catch(() => {});
+  });
+
+  function startMusic() {
+    if (musicStarted) return;
+    bgMusic.play().then(() => {
+      musicStarted = true;
+      muteBtn.textContent = '♫';
+      muteBtn.classList.remove('muted');
+    }).catch(() => {});
+  }
+
+  // Start as soon as audio data is buffered
+  bgMusic.addEventListener('canplaythrough', startMusic, { once: true });
+  startMusic();
+
+  function onFirstInteraction() {
+    startMusic();
+    if (musicStarted) {
+      document.removeEventListener('keydown', onFirstInteraction);
+      document.removeEventListener('click', onFirstInteraction);
+      document.removeEventListener('touchstart', onFirstInteraction);
+    }
+  }
+  document.addEventListener('keydown', onFirstInteraction);
+  document.addEventListener('click', onFirstInteraction);
+  document.addEventListener('touchstart', onFirstInteraction);
+
+  function toggleMute() {
+    bgMusic.muted = !bgMusic.muted;
+    muteBtn.textContent = bgMusic.muted ? '♫̸' : '♫';
+    muteBtn.classList.toggle('muted', bgMusic.muted);
+  }
+
+  muteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleMute();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyM') {
+      toggleMute();
+      e.preventDefault();
+    }
+  });
+</script>
+
+<script>
+  const monitor = document.getElementById('monitor');
+  const themeSelect = document.getElementById('themeSelect');
+  const hdrCheck = document.getElementById('hdrCheck');
+  const hdrBadge = document.getElementById('hdrBadge');
+  const themes = ['theme-amber', 'theme-green', 'theme-cyan'];
+
+  themeSelect.addEventListener('change', () => {
+    themes.forEach(t => monitor.classList.remove(t));
+    monitor.classList.add(themeSelect.value);
+    window.crtTheme = themeSelect.value;
+  });
+  window.crtTheme = 'theme-amber';
+
+  // HDR: wykryj czy wyświetlacz obsługuje HDR
+  const hdrSupported = window.matchMedia('(dynamic-range: high)').matches;
+  window.hdrDisplay = hdrSupported;
+  window.hdrMode = hdrSupported;
+
+  if (hdrSupported) {
+    hdrBadge.classList.add('hdr-on');
+    hdrCheck.checked = true;
+    monitor.classList.add('hdr-mode');
+  } else {
+    hdrBadge.classList.add('hdr-off');
+    hdrCheck.checked = false;
+  }
+
+  hdrCheck.addEventListener('change', () => {
+    window.hdrMode = hdrCheck.checked;
+    monitor.classList.toggle('hdr-mode', hdrCheck.checked);
+    hdrBadge.classList.toggle('hdr-on', hdrCheck.checked);
+    hdrBadge.classList.toggle('hdr-off', !hdrCheck.checked);
+  });
+</script>
+<script src="wasm_exec.js"></script>
+<script>
+  const go = new Go();
+  WebAssembly.instantiateStreaming(fetch('game.wasm'), go.importObject)
+    .then(result => {
+      document.getElementById('loading').style.display = 'none';
+      go.run(result.instance);
+    })
+    .catch(err => {
+      document.getElementById('loading').textContent = 'ERROR: ' + err.message;
+    });
+</script>
+</body>
+</html>

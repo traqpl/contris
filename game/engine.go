@@ -1,0 +1,191 @@
+//go:build js && wasm
+
+package main
+
+import "syscall/js"
+
+type GameState int
+
+const (
+	StatePlaying GameState = iota
+	StateGameOver
+	StatePaused
+	StateLevelEnd
+	StateVictory
+)
+
+type LevelSummary struct {
+	Level      int
+	LinesLevel int
+	ScoreLevel int
+	TotalScore int
+	TotalLines int
+}
+
+type Cell struct {
+	Co   string
+	Pid  int
+	Wear int  // poziom zużycia 0–3, przypisany przy spawnie
+	RibH bool // żebra poziome (kontener stoi pionowo)
+}
+
+type PieceBody struct {
+	Co    string
+	Cells []Vec2
+}
+
+type Piece struct {
+	Shape []Vec2
+	Wear  []int // Wear[i] odpowiada Shape[i], stabilne przez rotacje
+	Co    string
+	Label string
+	R, C  int
+}
+
+type FlashMsg struct {
+	Text  string
+	Color string
+	T     float64 // remaining seconds to display
+}
+
+type Engine struct {
+	canvas js.Value
+	ctx    js.Value
+
+	state GameState
+
+	grid     [ROWS][COLS]*Cell
+	bodies   map[int]*PieceBody // pid → body for shape outline rendering
+	pidCount int
+
+	cur  Piece
+	next PieceDef
+
+	score int
+	lines int
+	level int
+
+	dropTimer  float64
+	redTimer   float64 // time spent in red heel zone
+	levelTimer float64 // czas w bieżącym poziomie (0 → LevelDuration)
+
+	levelStartScore int // score na początku poziomu
+	levelStartLines int // linie na początku poziomu
+
+	curHeel  float64
+	heelAnim float64
+
+	flash     *FlashMsg
+	comboText string
+	comboTime float64
+	levelSumm *LevelSummary // dane do ekranu końca poziomu
+
+	shipFilledRows int // permanently filled ship rows from completed levels
+
+	keys map[string]bool
+}
+
+func NewEngine(canvas js.Value) *Engine {
+	opts := js.Global().Get("Object").New()
+	opts.Set("colorSpace", "display-p3")
+	hdr := js.Global().Get("hdrDisplay")
+	if !hdr.IsUndefined() && hdr.Bool() {
+		opts.Set("pixelFormat", "float16") // HDR brightness > 1.0 na wspieranych wyświetlaczach
+	}
+	ctx := canvas.Call("getContext", "2d", opts)
+	if ctx.IsNull() || ctx.IsUndefined() {
+		ctx = canvas.Call("getContext", "2d")
+	}
+	e := &Engine{
+		canvas: canvas,
+		ctx:    ctx,
+		keys:   make(map[string]bool),
+	}
+	e.newGame()
+	return e
+}
+
+func (e *Engine) newGame() {
+	e.grid = [ROWS][COLS]*Cell{}
+	e.bodies = make(map[int]*PieceBody)
+	e.pidCount = 0
+
+	e.score = 0
+	e.lines = 0
+	e.level = 1
+
+	e.dropTimer = 0
+	e.redTimer = 0
+	e.levelTimer = 0
+	e.curHeel = 0
+	e.heelAnim = 0
+
+	e.levelStartScore = 0
+	e.levelStartLines = 0
+	e.levelSumm = nil
+	e.shipFilledRows = 0
+
+	e.flash = nil
+	e.comboText = ""
+	e.comboTime = 0
+	e.state = StatePlaying
+
+	e.next = randDef()
+	e.spawn()
+}
+
+func (e *Engine) nextLevel() {
+	// Commit current level's cargo as permanent ship layer
+	e.shipFilledRows += shipRowsForLevel(e.level)
+
+	if e.level >= MaxLevel {
+		e.grid = [ROWS][COLS]*Cell{}
+		e.bodies = make(map[int]*PieceBody)
+		e.state = StateVictory
+		return
+	}
+
+	e.level++
+
+	// Reset board for fresh level
+	e.grid = [ROWS][COLS]*Cell{}
+	e.bodies = make(map[int]*PieceBody)
+	e.pidCount = 0
+
+	e.levelTimer = 0
+	e.dropTimer = 0
+	e.redTimer = 0
+	e.curHeel = 0
+	e.heelAnim = 0
+
+	e.levelStartScore = e.score
+	e.levelStartLines = e.lines
+	e.levelSumm = nil
+
+	e.flash = nil
+	e.comboText = ""
+	e.comboTime = 0
+
+	e.state = StatePlaying
+	e.next = randDef()
+	e.spawn()
+}
+
+func (e *Engine) spawn() {
+	d := e.next
+	_, w := shapeDims(d.Shape)
+	wear := make([]int, len(d.Shape))
+	copy(wear, d.Wear)
+	e.cur = Piece{
+		Shape: copyShape(d.Shape),
+		Wear:  wear,
+		Co:    d.Co,
+		Label: d.Label,
+		R:     0,
+		C:     (COLS - w) / 2,
+	}
+	e.next = randDef()
+	if !e.canFit(0, e.cur.C, e.cur.Shape) {
+		e.state = StateGameOver
+	}
+}

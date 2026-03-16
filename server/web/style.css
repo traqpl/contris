@@ -1,0 +1,214 @@
+/* ── reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ui-font: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
+}
+
+/* ── CRT themes ───────────────────────────────────────────────────────────── */
+.theme-amber {
+  --crt-fg:   #ffc66d;
+  --crt-dim:  #6b553f;
+  --crt-glow: rgba(255,198,109,0.38);
+  --crt-bg:   #0b0c0b;
+}
+.theme-green {
+  --crt-fg:   #9cff9c;
+  --crt-dim:  #3f6b3f;
+  --crt-glow: rgba(156,255,156,0.38);
+  --crt-bg:   #090c09;
+}
+.theme-cyan {
+  --crt-fg:   #8feaff;
+  --crt-dim:  #3f5f6b;
+  --crt-glow: rgba(143,234,255,0.38);
+  --crt-bg:   #09090c;
+}
+
+/* ── body ─────────────────────────────────────────────────────────────────── */
+body {
+  background: #050506;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: var(--ui-font);
+}
+
+/* ── monitor shell ────────────────────────────────────────────────────────── */
+.monitor {
+  background: var(--crt-bg);
+  border: 2px solid #1a2030;
+  border-radius: 8px;
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow:
+    0 0 0 1px #0a0a0a,
+    0 0 40px rgba(0,0,0,0.9),
+    inset 0 0 60px rgba(0,0,0,0.4);
+  position: relative;
+  overflow: hidden;
+  width: fit-content;
+  max-width: 99vw;
+}
+
+/* Vignette */
+.monitor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── toolbar ──────────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  position: relative;
+  z-index: 3;
+}
+
+.toolbar-title {
+  font-family: var(--ui-font);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--crt-fg);
+  letter-spacing: 2.4px;
+  text-shadow: 0 0 10px var(--crt-glow);
+}
+
+.theme-select {
+  background: transparent;
+  border: 1px solid var(--crt-dim);
+  color: var(--crt-fg);
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 2px 6px;
+  cursor: pointer;
+  outline: none;
+  letter-spacing: 1px;
+}
+.theme-select option {
+  background: #0b0c0b;
+  color: var(--crt-fg);
+  font-family: var(--ui-font);
+}
+
+.toolbar-label {
+  font-family: var(--ui-font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  color: var(--crt-fg);
+}
+
+/* ── canvas wrapper ───────────────────────────────────────────────────────── */
+.canvas-wrap {
+  position: relative;
+  z-index: 3;
+}
+
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  /* Skalowanie proporcjonalne do ekranu – canvas wewnętrznie zawsze 490×604 */
+  width: min(calc(99vw - 28px), calc(93vh * 490 / 692));
+  aspect-ratio: 490 / 692;
+  height: auto;
+}
+
+#loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--crt-fg);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-shadow: 0 0 12px var(--crt-glow);
+  background: var(--crt-bg);
+}
+
+/* ── HDR toggle ───────────────────────────────────────────────────────────── */
+
+/* ── mute button ──────────────────────────────────────────────────────────── */
+.mute-btn {
+  background: transparent;
+  border: 1px solid var(--crt-dim);
+  color: var(--crt-fg);
+  font-size: 14px;
+  padding: 1px 7px;
+  cursor: pointer;
+  border-radius: 2px;
+  line-height: 1;
+  transition: color 0.2s, border-color 0.2s, text-shadow 0.2s;
+  text-shadow: 0 0 6px var(--crt-glow);
+}
+.mute-btn:hover {
+  text-shadow: 0 0 12px var(--crt-glow);
+}
+.mute-btn.muted {
+  color: var(--crt-dim);
+  text-shadow: none;
+  border-color: #1a2030;
+}
+
+.hdr-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  gap: 0;
+}
+.hdr-toggle input[type="checkbox"] {
+  display: none;
+}
+.hdr-badge {
+  font-family: var(--ui-font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  user-select: none;
+  transition: color 0.2s, text-shadow 0.2s, border-color 0.2s;
+}
+.hdr-badge.hdr-on {
+  color: #ffe08a;
+  border-color: #ffe08a;
+  text-shadow: 0 0 8px #ffcc44, 0 0 20px #ffaa00;
+}
+.hdr-badge.hdr-off {
+  color: #3a5060;
+  border-color: #2a3a48;
+  text-shadow: none;
+}
+
+/* HDR mode — silniejsze blaski CSS */
+.hdr-mode.theme-amber { --crt-glow: rgba(255,210,80,0.60); }
+.hdr-mode.theme-green { --crt-glow: rgba(156,255,156,0.60); }
+.hdr-mode.theme-cyan  { --crt-glow: rgba(143,234,255,0.60); }
+
+.hdr-mode .toolbar-title {
+  text-shadow: 0 0 8px var(--crt-glow), 0 0 24px var(--crt-fg);
+}
+
+/* ── footer ───────────────────────────────────────────────────────────────── */
+.footer {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--crt-dim);
+  text-align: right;
+  letter-spacing: 1.2px;
+  position: relative;
+  z-index: 3;
+}
