@@ -81,8 +81,8 @@ func init() {
 	add("tu4", "orange", "4TU", 6)
 	add("tu4", "white", "4TU", 2)
 
-	pool = append(pool, PieceDef{Shape: []Vec2{{0, 0}}, Co: "reef", Label: "CHŁODNIA", W: 2})
-	pool = append(pool, PieceDef{Shape: []Vec2{{0, 0}}, Co: "haz", Label: "NIEBEZP.", W: 2})
+	pool = append(pool, PieceDef{Shape: []Vec2{{0, 0}}, Co: "reef", Label: "REEFER", W: 2})
+	pool = append(pool, PieceDef{Shape: []Vec2{{0, 0}}, Co: "haz", Label: "HAZMAT", W: 2})
 
 	for _, key := range []string{"O", "L", "J", "T", "S", "Z"} {
 		add(key, "orange", key, 3)

@@ -514,7 +514,7 @@ func (e *Engine) renderSidebar() {
 	// ── Next piece ────────────────────────────────────────────────────────
 	e.ctx.Set("fillStyle", dim)
 	e.noGlow()
-	e.text("NASTĘPNY", x+sideW/2, y+16, 18, "center")
+	e.text("NEXT", x+sideW/2, y+16, 18, "center")
 	y += 24
 
 	if e.next.Shape != nil {
@@ -575,9 +575,9 @@ func (e *Engine) renderSidebar() {
 		y += 26
 	}
 
-	statRow("PUNKTY", itoa(e.score), color)
-	statRow("LINIE", itoa(e.lines), color)
-	statRow("POZIOM", itoa(e.level), color)
+	statRow("SCORE", itoa(e.score), color)
+	statRow("LINES", itoa(e.lines), color)
+	statRow("LEVEL", itoa(e.level), color)
 
 	remaining := levelDuration(e.level) - e.levelTimer
 	mins := int(remaining) / 60
@@ -593,7 +593,7 @@ func (e *Engine) renderSidebar() {
 	} else if remaining < 60 {
 		timerColor = "#dd8844"
 	}
-	statRow("DO KOŃCA", timerStr, timerColor)
+	statRow("TIME LEFT", timerStr, timerColor)
 
 	if e.comboText != "" && e.comboTime > 0 {
 		alpha := math.Min(1.0, e.comboTime)
@@ -614,7 +614,7 @@ func (e *Engine) renderSidebar() {
 	zone := heelZone(predH, e.level)
 
 	zoneColors := map[string]string{"green": color, "yellow": "#d09030", "red": "#dd3030"}
-	zoneLabels := map[string]string{"green": "TRYM ✓ DOBRY", "yellow": "TRYM ⚠ UWAGA", "red": "TRYM ✗ KRYZYS"}
+	zoneLabels := map[string]string{"green": "TRIM ✓ GOOD", "yellow": "TRIM ⚠ WARNING", "red": "TRIM ✗ DANGER"}
 
 	e.noGlow()
 	e.ctx.Set("fillStyle", zoneColors[zone])
@@ -622,7 +622,7 @@ func (e *Engine) renderSidebar() {
 	y += 24
 
 	e.ctx.Set("fillStyle", dim)
-	e.text("trym boczny", x+sideW/2, y+14, 15, "center")
+	e.text("lateral trim", x+sideW/2, y+14, 15, "center")
 	y += 18
 
 	e.renderGauge(x, y, sideW, 28, e.heelAnim, predH)
@@ -635,15 +635,15 @@ func (e *Engine) renderSidebar() {
 
 	// ── Rules + Keys — przypięte do dołu ─────────────────────────────────
 	rules := []struct{ c, t string }{
-		{"#4ab87a", "mono+zielony = 400"},
-		{"#c0b030", "mono+żółty   = 200"},
-		{"#6aa0cc", "miks+zielony = 150"},
-		{"#88b878", "miks+żółty   =  80"},
-		{"#cc4444", "czerwony → linia stoi"},
-		{"#d08030", "⚠+⚠(skos) = bomba"},
-		{"#30d0d0", "❄×3(skos) = łańcuch"},
+		{"#4ab87a", "mono+green  = 400"},
+		{"#c0b030", "mono+yellow = 200"},
+		{"#6aa0cc", "mix+green   = 150"},
+		{"#88b878", "mix+yellow  =  80"},
+		{"#cc4444", "red → row stays"},
+		{"#d08030", "⚠+⚠(diag) = bomb"},
+		{"#30d0d0", "❄×3(diag) = chain"},
 	}
-	keys := []string{"← →  ruch", "↑  obrót", "↓  przyspiesz", "SPACJA  drop", "P / ESC  pauza"}
+	keys := []string{"← →  move", "↑  rotate", "↓  speed up", "SPACE  drop", "P / ESC  pause"}
 
 	ruleH := 19.0
 	keyH := 18.0
@@ -776,67 +776,32 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 	shipRight := sa - bowS*0.2
 	shipW := shipRight - shipLeft
 	cellW := shipW / COLS
-	rowH := totalH / ROWS
+	layerH := totalH / float64(MaxLevel)
 
-	// ── Permanent cargo from completed levels ─────────────────────────────
-	if e.shipFilledRows > 0 {
-		startRow := ROWS - e.shipFilledRows
-		startY := -deckH - maxCargoH + float64(startRow)*rowH
-		fillH := float64(e.shipFilledRows) * rowH
+	// ── Completed campaign cargo layers ───────────────────────────────────
+	for layer := 0; layer < e.completedShipLayers; layer++ {
+		layerY := -deckH - float64(layer+1)*layerH
 
-		// Solid sealed cargo fill
 		e.ctx.Set("fillStyle", "#1e3a28")
-		e.ctx.Call("fillRect", shipLeft+0.5, startY+0.5, shipW-1, fillH-0.5)
+		e.ctx.Call("fillRect", shipLeft+0.5, layerY+0.5, shipW-1, layerH-1)
 
-		// Cell grid texture
 		e.ctx.Set("strokeStyle", "rgba(60,130,80,0.2)")
 		e.ctx.Set("lineWidth", 0.5)
-		for pr := startRow; pr < ROWS; pr++ {
-			cy := -deckH - maxCargoH + float64(pr)*rowH
-			for c := 0; c < COLS; c++ {
-				cx := shipLeft + float64(c)*cellW
-				e.ctx.Call("strokeRect", cx+0.5, cy+0.5, cellW-1, rowH-0.5)
-			}
+		for c := 0; c < COLS; c++ {
+			cx := shipLeft + float64(c)*cellW
+			e.ctx.Call("strokeRect", cx+0.5, layerY+0.5, cellW-1, layerH-1)
 		}
+	}
 
-		// Level separator lines
+	if e.completedShipLayers > 0 {
 		e.ctx.Set("strokeStyle", "rgba(100,210,140,0.35)")
 		e.ctx.Set("lineWidth", 1)
-		cumRows := 0
-		for lv := 1; lv < MaxLevel; lv++ {
-			cumRows += shipRowsPerLevel[lv-1]
-			if cumRows >= e.shipFilledRows {
-				break
-			}
-			sepY := -deckH - maxCargoH + float64(ROWS-e.shipFilledRows+cumRows)*rowH
+		for layer := 1; layer < e.completedShipLayers; layer++ {
+			sepY := -deckH - float64(layer)*layerH
 			e.ctx.Call("beginPath")
 			e.ctx.Call("moveTo", shipLeft, sepY)
 			e.ctx.Call("lineTo", shipLeft+shipW, sepY)
 			e.ctx.Call("stroke")
-		}
-	}
-
-	// ── Kontenery z grida — rysowane PRZED kadłubem ───────────────────────
-	// Rząd 0 grida = szczyt cargo, rząd ROWS-1 = dno (poziom pokładu)
-	for r := 0; r < ROWS; r++ {
-		cellY := -deckH - maxCargoH + float64(r)*rowH
-		for c := 0; c < COLS; c++ {
-			cell := e.grid[r][c]
-			if cell == nil {
-				continue
-			}
-			cx := shipLeft + float64(c)*cellW
-			e.ctx.Set("fillStyle", coColor[cell.Co])
-			e.ctx.Call("fillRect", cx+0.5, cellY+0.5, cellW-1, rowH-0.5)
-			// Żebro na komórce
-			e.ctx.Set("fillStyle", "rgba(0,0,0,0.25)")
-			if cell.RibH {
-				mid := cellY + rowH/2
-				e.ctx.Call("fillRect", cx+0.5, mid, cellW-1, 0.5)
-			} else {
-				mid := cx + cellW/2
-				e.ctx.Call("fillRect", mid, cellY+0.5, 0.5, rowH-0.5)
-			}
 		}
 	}
 
@@ -938,25 +903,16 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 	e.ctx.Set("textBaseline", "alphabetic")
 	e.ctx.Set("fillStyle", "#2a4050")
 	e.ctx.Set("textAlign", "left")
-	e.ctx.Call("fillText", "L", x+4, y+h-4)
+	e.ctx.Call("fillText", "P", x+4, y+h-4)
 	e.ctx.Set("textAlign", "right")
-	e.ctx.Call("fillText", "P", x+w-4, y+h-4)
+	e.ctx.Call("fillText", "S", x+w-4, y+h-4)
 	e.ctx.Set("fillStyle", col)
 	e.ctx.Set("textAlign", "center")
 	e.ctx.Call("fillText", fmt.Sprintf("%s%.1f°", sign, deg), x+w/2, y+h-4)
 
-	filled := 0
-	for r := 0; r < ROWS; r++ {
-		for c := 0; c < COLS; c++ {
-			if e.grid[r][c] != nil {
-				filled++
-			}
-		}
-	}
-	permCells := e.shipFilledRows * COLS
-	pct := (permCells + filled) * 100 / (ROWS * COLS)
+	pct := e.completedShipLayers * 100 / MaxLevel
 	e.ctx.Set("fillStyle", "#2a4050")
-	e.ctx.Call("fillText", fmt.Sprintf("załadunek %d%%", pct), x+w/2, y+h-14)
+	e.ctx.Call("fillText", fmt.Sprintf("loaded %d%%", pct), x+w/2, y+h-14)
 }
 
 // ── level end ─────────────────────────────────────────────────────────────────
@@ -976,7 +932,7 @@ func (e *Engine) renderLevelEnd() {
 	cx := boardX + float64(COLS)*CELL/2
 	y := boardY + 28.0
 
-	e.crispGlow(fmt.Sprintf("POZIOM %d", s.Level), cx, y, 24, "center", color)
+	e.crispGlow(fmt.Sprintf("LEVEL %d", s.Level), cx, y, 24, "center", color)
 	y += 10
 
 	// Separator
@@ -996,10 +952,10 @@ func (e *Engine) renderLevelEnd() {
 		y += 24
 	}
 	e.ctx.Set("fillStyle", "#4a6070")
-	e.text("— ten poziom —", cx, y, 14, "center")
+	e.text("— this level —", cx, y, 14, "center")
 	y += 20
-	row("LINIE", itoa(s.LinesLevel))
-	row("PUNKTY", itoa(s.ScoreLevel))
+	row("LINES", itoa(s.LinesLevel))
+	row("SCORE", itoa(s.ScoreLevel))
 
 	// Separator
 	e.ctx.Set("strokeStyle", "#2e404e")
@@ -1010,10 +966,10 @@ func (e *Engine) renderLevelEnd() {
 	y += 14
 
 	e.ctx.Set("fillStyle", "#4a6070")
-	e.text("— łącznie —", cx, y, 14, "center")
+	e.text("— total —", cx, y, 14, "center")
 	y += 20
-	row("LINIE", itoa(s.TotalLines))
-	row("PUNKTY", itoa(s.TotalScore))
+	row("LINES", itoa(s.TotalLines))
+	row("SCORE", itoa(s.TotalScore))
 
 	// Separator
 	e.ctx.Set("strokeStyle", "#2e404e")
@@ -1025,13 +981,13 @@ func (e *Engine) renderLevelEnd() {
 
 	// Przyciski
 	e.ctx.Set("fillStyle", color)
-	e.text("SPACJA / ENTER", cx, y, 16, "center")
+	e.text("SPACE / ENTER", cx, y, 16, "center")
 	y += 20
 	e.ctx.Set("fillStyle", "#4a7a8a")
 	if s.Level >= MaxLevel {
-		e.text("zakończ misję", cx, y, 15, "center")
+		e.text("end mission", cx, y, 15, "center")
 	} else {
-		e.text("następny poziom", cx, y, 15, "center")
+		e.text("next level", cx, y, 15, "center")
 	}
 	y += 26
 
@@ -1039,7 +995,7 @@ func (e *Engine) renderLevelEnd() {
 	e.text("ESC", cx, y, 16, "center")
 	y += 20
 	e.ctx.Set("fillStyle", "#4a4040")
-	e.text("zakończ grę", cx, y, 15, "center")
+	e.text("end game", cx, y, 15, "center")
 }
 
 // ── victory ───────────────────────────────────────────────────────────────
@@ -1053,20 +1009,20 @@ func (e *Engine) renderVictory() {
 	cx := boardX + float64(COLS)*CELL/2
 	y := boardY + float64(ROWS)*CELL/2 - 60
 
-	e.crispGlow("⚓  MISJA UKOŃCZONA", cx, y, 22, "center", color)
+	e.crispGlow("⚓  MISSION COMPLETE", cx, y, 22, "center", color)
 	y += 36
 
-	e.crispGlow(fmt.Sprintf("WYNIK: %d", e.score), cx, y, 20, "center", color)
+	e.crispGlow(fmt.Sprintf("SCORE: %d", e.score), cx, y, 20, "center", color)
 	y += 28
 
 	e.ctx.Set("fillStyle", "#5a7888")
-	e.text(fmt.Sprintf("LINIE: %d", e.lines), cx, y, 16, "center")
+	e.text(fmt.Sprintf("LINES: %d", e.lines), cx, y, 16, "center")
 	y += 20
-	e.text(fmt.Sprintf("POZIOMY: %d/%d", MaxLevel, MaxLevel), cx, y, 16, "center")
+	e.text(fmt.Sprintf("LEVELS: %d/%d", MaxLevel, MaxLevel), cx, y, 16, "center")
 	y += 36
 
 	e.ctx.Set("fillStyle", color)
-	e.text("SPACJA = nowa gra", cx, y, 16, "center")
+	e.text("SPACE = new game", cx, y, 16, "center")
 }
 
 // ── paused ────────────────────────────────────────────────────────────────────
@@ -1077,35 +1033,37 @@ func (e *Engine) renderPaused() {
 	cy := boardY + float64(ROWS)*CELL/2
 	e.glow(14)
 	e.ctx.Set("fillStyle", e.crtColor())
-	e.text("PAUZA", boardX+float64(COLS)*CELL/2, cy, 28, "center")
+	e.text("PAUSED", boardX+float64(COLS)*CELL/2, cy, 28, "center")
 	e.noGlow()
 	e.ctx.Set("fillStyle", "#3a5060")
-	e.text("P / ESC = wznów", boardX+float64(COLS)*CELL/2, cy+20, 13, "center")
+	e.text("P / ESC = resume", boardX+float64(COLS)*CELL/2, cy+20, 13, "center")
 }
 
 // ── game over ─────────────────────────────────────────────────────────────────
 
 func (e *Engine) renderGameOver() {
-	sank := e.flash != nil && len(e.flash.Text) > 5 // "STATEK" check
-	_ = sank
-
 	e.ctx.Set("fillStyle", "rgba(0,0,0,0.78)")
 	e.ctx.Call("fillRect", boardX, boardY, float64(COLS)*CELL, float64(ROWS)*CELL)
 
 	titleCol := "#f84"
-	titleText := "ŁADOWNIA PEŁNA"
-	if e.flash != nil && e.flash.Color == "#4af" {
+	titleText := "CARGO HOLD FULL"
+	titleSize := 22.0
+	if e.gameOverReason == GameOverReasonShipSank {
 		titleCol = "#4af"
-		titleText = "STATEK ZATONĄŁ"
+		titleText = e.retryPrompt
+		if titleText == "" {
+			titleText = "Play again."
+		}
+		titleSize = 18
 	}
 
 	cy := boardY + float64(ROWS)*CELL/2
 	e.glow(16)
 	e.ctx.Set("fillStyle", titleCol)
-	e.text(titleText, boardX+float64(COLS)*CELL/2, cy-8, 22, "center")
+	e.text(titleText, boardX+float64(COLS)*CELL/2, cy-8, titleSize, "center")
 	e.noGlow()
 	e.ctx.Set("fillStyle", "#3a5060")
-	e.text(fmt.Sprintf("wynik: %d", e.score), boardX+float64(COLS)*CELL/2, cy+14, 16, "center")
+	e.text(fmt.Sprintf("score: %d", e.score), boardX+float64(COLS)*CELL/2, cy+14, 16, "center")
 	e.ctx.Set("fillStyle", "#2a4050")
-	e.text("SPACJA = nowa gra", boardX+float64(COLS)*CELL/2, cy+30, 14, "center")
+	e.text("SPACE = new game", boardX+float64(COLS)*CELL/2, cy+30, 14, "center")
 }

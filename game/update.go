@@ -21,8 +21,10 @@ func (e *Engine) Update(dt float64) {
 	if heelZone(e.curHeel, e.level) == "red" {
 		e.redTimer = math.Min(e.redTimer+dt, RedLimit)
 		if e.redTimer >= RedLimit {
+			e.gameOverReason = GameOverReasonShipSank
+			e.retryPrompt = randomReplayPrompt()
 			e.state = StateGameOver
-			e.flash = &FlashMsg{Text: "⛵  STATEK ZATONĄŁ", Color: "#4af", T: 99}
+			e.flash = &FlashMsg{Text: "⛵", Color: "#4af", T: 99}
 		}
 	} else {
 		e.redTimer = math.Max(0, e.redTimer-dt*0.5)
@@ -330,7 +332,7 @@ func (e *Engine) activateHaz() bool {
 				}
 				e.score = max0(e.score - 50)
 				e.flash = &FlashMsg{
-					Text:  "⚠  WYBUCH  −50 pkt",
+					Text:  "⚠  EXPLOSION  −50 pts",
 					Color: "#ff8822",
 					T:     2.2,
 				}
@@ -358,7 +360,7 @@ func (e *Engine) activateReef() bool {
 					e.grid[pos[0]][pos[1]] = nil
 				}
 				e.flash = &FlashMsg{
-					Text:  "❄  ŁAŃCUCH  +" + itoa(pts) + " pkt",
+					Text:  "❄  CHAIN  +" + itoa(pts) + " pts",
 					Color: "#44ddff",
 					T:     2.2,
 				}

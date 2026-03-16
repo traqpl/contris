@@ -54,17 +54,6 @@ func levelDropSpeed(level int) float64 {
 	return 0.20
 }
 
-// shipRowsPerLevel defines how many ship rows each completed level fills.
-// Sum must equal ROWS (3+3+3+3+4 = 16).
-var shipRowsPerLevel = [MaxLevel]int{3, 3, 3, 3, 4}
-
-func shipRowsForLevel(level int) int {
-	if level >= 1 && level <= MaxLevel {
-		return shipRowsPerLevel[level-1]
-	}
-	return 3
-}
-
 var coColor = map[string]string{
 	"orange": "#b84a0a", // rdzawo-pomarańczowy, typowy RAL 2009
 	"white":  "#7a8e9e", // szaro-niebieski, "białe" kontenery są często brudne

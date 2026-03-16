@@ -138,8 +138,6 @@ canvas {
   background: var(--crt-bg);
 }
 
-/* ── HDR toggle ───────────────────────────────────────────────────────────── */
-
 /* ── mute button ──────────────────────────────────────────────────────────── */
 .mute-btn {
   background: transparent;
@@ -162,36 +160,6 @@ canvas {
   border-color: #1a2030;
 }
 
-.hdr-toggle {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  gap: 0;
-}
-.hdr-toggle input[type="checkbox"] {
-  display: none;
-}
-.hdr-badge {
-  font-family: var(--ui-font);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  padding: 2px 6px;
-  border: 1px solid currentColor;
-  border-radius: 2px;
-  user-select: none;
-  transition: color 0.2s, text-shadow 0.2s, border-color 0.2s;
-}
-.hdr-badge.hdr-on {
-  color: #ffe08a;
-  border-color: #ffe08a;
-  text-shadow: 0 0 8px #ffcc44, 0 0 20px #ffaa00;
-}
-.hdr-badge.hdr-off {
-  color: #3a5060;
-  border-color: #2a3a48;
-  text-shadow: none;
-}
 
 /* HDR mode — silniejsze blaski CSS */
 .hdr-mode.theme-amber { --crt-glow: rgba(255,210,80,0.60); }

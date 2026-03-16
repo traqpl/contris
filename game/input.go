@@ -54,7 +54,7 @@ func (e *Engine) registerInput() {
 			}
 			// Prevent page scroll
 			switch code {
-			case "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "KeyP", "KeyM", "Escape":
+			case "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "KeyP", "KeyM", "KeyT", "Escape":
 				args[0].Call("preventDefault")
 			}
 			return nil

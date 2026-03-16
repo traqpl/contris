@@ -2,9 +2,14 @@
 
 package main
 
-import "syscall/js"
+import (
+	"math/rand"
+	"syscall/js"
+)
 
 type GameState int
+
+type GameOverReason int
 
 const (
 	StatePlaying GameState = iota
@@ -13,6 +18,21 @@ const (
 	StateLevelEnd
 	StateVictory
 )
+
+const (
+	GameOverReasonNone GameOverReason = iota
+	GameOverReasonHoldFull
+	GameOverReasonShipSank
+)
+
+var replayPrompts = []string{
+	"Give it another shot.",
+	"One more run.",
+	"You were close — try again.",
+	"Reset and stack smarter.",
+	"New voyage, better balance.",
+	"Run it back.",
+}
 
 type LevelSummary struct {
 	Level      int
@@ -75,12 +95,14 @@ type Engine struct {
 	curHeel  float64
 	heelAnim float64
 
-	flash     *FlashMsg
-	comboText string
-	comboTime float64
-	levelSumm *LevelSummary // dane do ekranu końca poziomu
+	flash          *FlashMsg
+	comboText      string
+	comboTime      float64
+	levelSumm      *LevelSummary // dane do ekranu końca poziomu
+	retryPrompt    string
+	gameOverReason GameOverReason
 
-	shipFilledRows int // permanently filled ship rows from completed levels
+	completedShipLayers int
 
 	keys map[string]bool
 }
@@ -123,7 +145,9 @@ func (e *Engine) newGame() {
 	e.levelStartScore = 0
 	e.levelStartLines = 0
 	e.levelSumm = nil
-	e.shipFilledRows = 0
+	e.retryPrompt = ""
+	e.gameOverReason = GameOverReasonNone
+	e.completedShipLayers = 0
 
 	e.flash = nil
 	e.comboText = ""
@@ -135,8 +159,9 @@ func (e *Engine) newGame() {
 }
 
 func (e *Engine) nextLevel() {
-	// Commit current level's cargo as permanent ship layer
-	e.shipFilledRows += shipRowsForLevel(e.level)
+	if e.completedShipLayers < MaxLevel {
+		e.completedShipLayers++
+	}
 
 	if e.level >= MaxLevel {
 		e.grid = [ROWS][COLS]*Cell{}
@@ -161,6 +186,8 @@ func (e *Engine) nextLevel() {
 	e.levelStartScore = e.score
 	e.levelStartLines = e.lines
 	e.levelSumm = nil
+	e.retryPrompt = ""
+	e.gameOverReason = GameOverReasonNone
 
 	e.flash = nil
 	e.comboText = ""
@@ -186,6 +213,14 @@ func (e *Engine) spawn() {
 	}
 	e.next = randDef()
 	if !e.canFit(0, e.cur.C, e.cur.Shape) {
+		e.gameOverReason = GameOverReasonHoldFull
 		e.state = StateGameOver
 	}
+}
+
+func randomReplayPrompt() string {
+	if len(replayPrompts) == 0 {
+		return "Play again."
+	}
+	return replayPrompts[rand.Intn(len(replayPrompts))]
 }
