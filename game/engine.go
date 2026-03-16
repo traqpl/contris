@@ -12,7 +12,8 @@ type GameState int
 type GameOverReason int
 
 const (
-	StatePlaying GameState = iota
+	StateMainMenu GameState = iota
+	StatePlaying
 	StateGameOver
 	StatePaused
 	StateLevelEnd
@@ -123,8 +124,17 @@ func NewEngine(canvas js.Value) *Engine {
 		ctx:    ctx,
 		keys:   make(map[string]bool),
 	}
-	e.newGame()
+	e.enterMainMenu()
 	return e
+}
+
+func (e *Engine) enterMainMenu() {
+	e.newGame()
+	e.state = StateMainMenu
+	e.flash = nil
+	e.levelSumm = nil
+	e.retryPrompt = ""
+	e.gameOverReason = GameOverReasonNone
 }
 
 func (e *Engine) newGame() {

@@ -104,6 +104,10 @@ func (e *Engine) clear() {
 
 func (e *Engine) Render() {
 	e.clear()
+	if e.state == StateMainMenu {
+		e.renderMainMenu()
+		return
+	}
 	e.renderHeader()
 	e.renderBoard()
 	e.renderSidebar()
@@ -119,6 +123,93 @@ func (e *Engine) Render() {
 	}
 	if e.state == StateVictory {
 		e.renderVictory()
+	}
+}
+
+func (e *Engine) renderMainMenu() {
+	color := e.crtColor()
+	dim := "#5a7888"
+	soft := "#3a5060"
+	accent := "#8aaa7a"
+
+	e.crispGlow("CARGO SHIFT", canvasW/2, 26, 26, "center", color)
+	e.ctx.Set("fillStyle", soft)
+	e.noGlow()
+	e.text("stack smart · keep trim · fill all five decks", canvasW/2, 48, 14, "center")
+
+	panelX := boardX + 10.0
+	panelY := boardY + 22.0
+	panelW := float64(COLS)*CELL - 20.0
+	panelH := 272.0
+
+	e.ctx.Set("fillStyle", "rgba(0,0,0,0.72)")
+	e.ctx.Call("fillRect", panelX, panelY, panelW, panelH)
+	e.ctx.Set("strokeStyle", "#2e404e")
+	e.ctx.Set("lineWidth", 2)
+	e.ctx.Call("strokeRect", panelX+1, panelY+1, panelW-2, panelH-2)
+
+	cx := boardX + float64(COLS)*CELL/2
+	y := panelY + 34.0
+	e.crispGlow("MAIN MENU", cx, y, 20, "center", color)
+	y += 30
+	e.ctx.Set("fillStyle", dim)
+	e.text("Balance mixed cargo before the ship heels over.", cx, y, 14, "center")
+	y += 18
+	e.text("Each cleared level seals one more deck in the hull.", cx, y, 14, "center")
+	y += 34
+
+	e.crispGlow("SPACE / ENTER", cx, y, 20, "center", accent)
+	y += 22
+	e.ctx.Set("fillStyle", dim)
+	e.text("start a new shift", cx, y, 15, "center")
+	y += 30
+
+	e.ctx.Set("fillStyle", soft)
+	e.text("ARROWS move · rotate · drop", cx, y, 14, "center")
+	y += 18
+	e.text("P / ESC pause · T change theme · M mute", cx, y, 14, "center")
+	y += 18
+	e.text("Finish 5 levels to load the full ship.", cx, y, 14, "center")
+
+	sx := sideX
+	sy := boardY + 18.0
+	e.ctx.Set("fillStyle", dim)
+	e.text("SHIFT BRIEF", sx+sideW/2, sy+14, 17, "center")
+	sy += 26
+
+	brief := []string{
+		"GREEN trim gives the best row payout.",
+		"YELLOW trim is risky but still scores.",
+		"RED trim blocks row clears and sinks runs.",
+		"Hazmat pairs explode.",
+		"Reefer chains reward fast cleanup.",
+	}
+	for _, line := range brief {
+		e.ctx.Set("fillStyle", soft)
+		e.text(line, sx+6, sy+14, 14, "left")
+		sy += 20
+	}
+
+	sy += 8
+	e.ctx.Set("strokeStyle", "#2e404e")
+	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("beginPath")
+	e.ctx.Call("moveTo", sx+4, sy)
+	e.ctx.Call("lineTo", sx+sideW-4, sy)
+	e.ctx.Call("stroke")
+	sy += 18
+	e.ctx.Set("fillStyle", accent)
+	e.text("GOAL", sx+sideW/2, sy+14, 16, "center")
+	sy += 22
+	e.ctx.Set("fillStyle", soft)
+	e.text("Seal one deck per completed level.", sx+6, sy+14, 14, "left")
+	sy += 20
+	e.text("Five levels = fully loaded ship.", sx+6, sy+14, 14, "left")
+
+	e.renderShip(0, boardY+ROWS*CELL, canvasW, shipViewH, 0)
+	if hdrMode := e.hdrMode(); hdrMode {
+		e.ctx.Set("fillStyle", "#ffe08a")
+		e.text("HDR AUTO", canvasW-6, canvasH-6, 10, "right")
 	}
 }
 
@@ -769,18 +860,20 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 	hullD := h * 0.155
 	bowS := deckH * 1.05
 	sternT := 3.0
-	maxCargoH := h * 0.45       // cały obszar od pokładu w górę
-	totalH := deckH + maxCargoH // łącznie: wnętrze kadłuba + cargo powyżej pokładu
+	maxCargoH := h * 0.45 // cały obszar od pokładu w górę
+	stackTop := -deckH - maxCargoH
+	stackBottom := hullD
+	stackH := stackBottom - stackTop
 
 	shipLeft := -sa + sternT
 	shipRight := sa - bowS*0.2
 	shipW := shipRight - shipLeft
 	cellW := shipW / COLS
-	layerH := totalH / float64(MaxLevel)
+	layerH := stackH / float64(MaxLevel)
 
 	// ── Completed campaign cargo layers ───────────────────────────────────
 	for layer := 0; layer < e.completedShipLayers; layer++ {
-		layerY := -deckH - float64(layer+1)*layerH
+		layerY := stackBottom - float64(layer+1)*layerH
 
 		e.ctx.Set("fillStyle", "#1e3a28")
 		e.ctx.Call("fillRect", shipLeft+0.5, layerY+0.5, shipW-1, layerH-1)
@@ -797,7 +890,7 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 		e.ctx.Set("strokeStyle", "rgba(100,210,140,0.35)")
 		e.ctx.Set("lineWidth", 1)
 		for layer := 1; layer < e.completedShipLayers; layer++ {
-			sepY := -deckH - float64(layer)*layerH
+			sepY := stackBottom - float64(layer)*layerH
 			e.ctx.Call("beginPath")
 			e.ctx.Call("moveTo", shipLeft, sepY)
 			e.ctx.Call("lineTo", shipLeft+shipW, sepY)
@@ -995,7 +1088,7 @@ func (e *Engine) renderLevelEnd() {
 	e.text("ESC", cx, y, 16, "center")
 	y += 20
 	e.ctx.Set("fillStyle", "#4a4040")
-	e.text("end game", cx, y, 15, "center")
+	e.text("main menu", cx, y, 15, "center")
 }
 
 // ── victory ───────────────────────────────────────────────────────────────
@@ -1023,6 +1116,9 @@ func (e *Engine) renderVictory() {
 
 	e.ctx.Set("fillStyle", color)
 	e.text("SPACE = new game", cx, y, 16, "center")
+	y += 20
+	e.ctx.Set("fillStyle", "#4a4040")
+	e.text("ESC = main menu", cx, y, 14, "center")
 }
 
 // ── paused ────────────────────────────────────────────────────────────────────
@@ -1065,5 +1161,7 @@ func (e *Engine) renderGameOver() {
 	e.ctx.Set("fillStyle", "#3a5060")
 	e.text(fmt.Sprintf("score: %d", e.score), boardX+float64(COLS)*CELL/2, cy+14, 16, "center")
 	e.ctx.Set("fillStyle", "#2a4050")
-	e.text("SPACE = new game", boardX+float64(COLS)*CELL/2, cy+30, 14, "center")
+	e.text("SPACE / ENTER = new game", boardX+float64(COLS)*CELL/2, cy+30, 14, "center")
+	e.ctx.Set("fillStyle", "#4a4040")
+	e.text("ESC = main menu", boardX+float64(COLS)*CELL/2, cy+46, 14, "center")
 }

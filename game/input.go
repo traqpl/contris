@@ -29,6 +29,8 @@ func (e *Engine) registerInput() {
 				}
 			case "Space":
 				switch e.state {
+				case StateMainMenu:
+					e.newGame()
 				case StatePlaying:
 					e.hardDrop()
 				case StateGameOver:
@@ -39,8 +41,13 @@ func (e *Engine) registerInput() {
 					e.newGame()
 				}
 			case "Enter":
-				if e.state == StateLevelEnd {
+				switch e.state {
+				case StateMainMenu:
+					e.newGame()
+				case StateLevelEnd:
 					e.nextLevel()
+				case StateGameOver, StateVictory:
+					e.newGame()
 				}
 			case "KeyP", "Escape":
 				switch e.state {
@@ -49,12 +56,14 @@ func (e *Engine) registerInput() {
 				case StatePaused:
 					e.state = StatePlaying
 				case StateLevelEnd:
-					e.state = StateGameOver
+					e.enterMainMenu()
+				case StateGameOver, StateVictory:
+					e.enterMainMenu()
 				}
 			}
 			// Prevent page scroll
 			switch code {
-			case "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "KeyP", "KeyM", "KeyT", "Escape":
+			case "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Enter", "KeyP", "KeyM", "KeyT", "Escape":
 				args[0].Call("preventDefault")
 			}
 			return nil
