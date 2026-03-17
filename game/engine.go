@@ -98,12 +98,16 @@ type Engine struct {
 	curHeel  float64
 	heelAnim float64
 
-	flash          *FlashMsg
-	comboText      string
-	comboTime      float64
-	levelSumm      *LevelSummary // dane do ekranu końca poziomu
-	retryPrompt    string
-	gameOverReason GameOverReason
+	flash             *FlashMsg
+	comboText         string
+	comboTime         float64
+	levelSumm         *LevelSummary // dane do ekranu końca poziomu
+	retryPrompt       string
+	gameOverReason    GameOverReason
+	lastResultPending bool
+	lastResultScore   int
+	lastResultLines   int
+	lastResultLevel   int
 
 	completedShipLayers int
 
@@ -116,6 +120,25 @@ func (e *Engine) audioScene() string {
 		return "menu"
 	default:
 		return "game"
+	}
+}
+
+func (e *Engine) stateName() string {
+	switch e.state {
+	case StateMainMenu:
+		return "menu"
+	case StatePlaying:
+		return "playing"
+	case StateGameOver:
+		return "game_over"
+	case StatePaused:
+		return "paused"
+	case StateLevelEnd:
+		return "level_end"
+	case StateVictory:
+		return "victory"
+	default:
+		return "unknown"
 	}
 }
 
@@ -140,7 +163,23 @@ func NewEngine(canvas js.Value) *Engine {
 }
 
 func (e *Engine) enterMainMenu() {
+	pending := false
+	score := 0
+	lines := 0
+	level := 0
+	if e.state != StateMainMenu && (e.score > 0 || e.lines > 0) {
+		pending = true
+		score = e.score
+		lines = e.lines
+		level = e.level
+	}
 	e.newGame()
+	if pending {
+		e.lastResultPending = true
+		e.lastResultScore = score
+		e.lastResultLines = lines
+		e.lastResultLevel = level
+	}
 	e.state = StateMainMenu
 	e.flash = nil
 	e.levelSumm = nil
@@ -176,6 +215,7 @@ func (e *Engine) newGame() {
 	e.comboText = ""
 	e.comboTime = 0
 	e.state = StatePlaying
+	e.lastResultPending = false
 
 	e.next = randDef(e.level)
 	e.spawn()

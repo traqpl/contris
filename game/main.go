@@ -13,6 +13,14 @@ func main() {
 	engine = NewEngine(canvas)
 	engine.registerInput()
 	js.Global().Set("cargoShiftScene", engine.audioScene())
+	js.Global().Set("cargoShiftState", engine.stateName())
+	js.Global().Set("cargoShiftScore", engine.score)
+	js.Global().Set("cargoShiftLines", engine.lines)
+	js.Global().Set("cargoShiftLevel", engine.level)
+	js.Global().Set("cargoShiftResultPending", engine.lastResultPending)
+	js.Global().Set("cargoShiftResultScore", engine.lastResultScore)
+	js.Global().Set("cargoShiftResultLines", engine.lastResultLines)
+	js.Global().Set("cargoShiftResultLevel", engine.lastResultLevel)
 
 	var lastTime float64
 	var loop js.Func
@@ -30,6 +38,14 @@ func main() {
 		engine.Update(dt)
 		engine.Render()
 		js.Global().Set("cargoShiftScene", engine.audioScene())
+		js.Global().Set("cargoShiftState", engine.stateName())
+		js.Global().Set("cargoShiftScore", engine.score)
+		js.Global().Set("cargoShiftLines", engine.lines)
+		js.Global().Set("cargoShiftLevel", engine.level)
+		js.Global().Set("cargoShiftResultPending", engine.lastResultPending)
+		js.Global().Set("cargoShiftResultScore", engine.lastResultScore)
+		js.Global().Set("cargoShiftResultLines", engine.lastResultLines)
+		js.Global().Set("cargoShiftResultLevel", engine.lastResultLevel)
 
 		js.Global().Call("requestAnimationFrame", loop)
 		return nil

@@ -414,7 +414,7 @@ func (e *Engine) renderBoard() {
 			if cell == nil {
 				continue
 			}
-			e.drawCell(boardX+float64(c)*CELL, boardY+float64(r)*CELL, CELL, cell.Co, 1.0, cell.Wear, c, r, cell.RibH)
+			e.drawCell(boardX+float64(c)*CELL, boardY+float64(r)*CELL, CELL, cell.Co, 1.0, cell.Wear, c, r, cell.RibH, e.rowFrozenTime(r) > 0)
 		}
 	}
 
@@ -466,7 +466,7 @@ func (e *Engine) renderBoard() {
 			e.drawCell(
 				boardX+float64(e.cur.C+v.C)*CELL,
 				boardY+float64(gr+v.R)*CELL,
-				CELL, e.cur.Co, 0.18, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH,
+				CELL, e.cur.Co, 0.18, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH, e.rowFrozenTime(gr+v.R) > 0,
 			)
 		}
 	}
@@ -476,7 +476,7 @@ func (e *Engine) renderBoard() {
 		e.drawCell(
 			boardX+float64(e.cur.C+v.C)*CELL,
 			boardY+float64(e.cur.R+v.R)*CELL,
-			CELL, e.cur.Co, 1.0, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH,
+			CELL, e.cur.Co, 1.0, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH, e.rowFrozenTime(e.cur.R+v.R) > 0,
 		)
 	}
 
@@ -507,7 +507,7 @@ func (e *Engine) renderBoard() {
 
 // ── cell drawing ──────────────────────────────────────────────────────────────
 
-func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seedC, seedR int, ribH bool) {
+func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seedC, seedR int, ribH, frozen bool) {
 	e.ctx.Call("save")
 	if alpha < 1.0 {
 		e.ctx.Set("globalAlpha", alpha)
@@ -621,6 +621,24 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 		}
 	}
 
+	if frozen {
+		e.ctx.Set("fillStyle", "rgba(150, 225, 255, 0.16)")
+		e.ctx.Call("fillRect", x+1, y+1, sz-2, sz-2)
+		e.ctx.Set("strokeStyle", "rgba(160, 240, 255, 0.72)")
+		e.ctx.Set("lineWidth", 1)
+		e.ctx.Call("strokeRect", x+1.5, y+1.5, sz-3, sz-3)
+		e.ctx.Set("strokeStyle", "rgba(220, 248, 255, 0.34)")
+		e.ctx.Set("lineWidth", 0.8)
+		e.ctx.Call("beginPath")
+		e.ctx.Call("moveTo", x+sz*0.24, y+sz*0.28)
+		e.ctx.Call("lineTo", x+sz*0.40, y+sz*0.42)
+		e.ctx.Call("lineTo", x+sz*0.31, y+sz*0.60)
+		e.ctx.Call("moveTo", x+sz*0.62, y+sz*0.20)
+		e.ctx.Call("lineTo", x+sz*0.76, y+sz*0.34)
+		e.ctx.Call("lineTo", x+sz*0.66, y+sz*0.52)
+		e.ctx.Call("stroke")
+	}
+
 	e.ctx.Call("restore")
 }
 
@@ -689,7 +707,7 @@ func (e *Engine) renderSidebar() {
 		oy := y + (68-float64(nh)*s)/2
 		nextRibH := nh > nw
 		for i, v := range e.next.Shape {
-			e.drawCell(ox+float64(v.C)*s, oy+float64(v.R)*s, s, e.next.Co, 1.0, e.next.Wear[i], v.C, v.R, nextRibH)
+			e.drawCell(ox+float64(v.C)*s, oy+float64(v.R)*s, s, e.next.Co, 1.0, e.next.Wear[i], v.C, v.R, nextRibH, false)
 		}
 		e.ctx.Set("strokeStyle", coOutline[e.next.Co])
 		e.ctx.Set("lineWidth", 1.5)
@@ -1036,12 +1054,17 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 		}
 	}
 
-	// ── Obrys kadłuba — tylko linie, bez wypełnienia ───────────────────────
-	hullGlow := e.glowColor()
-	e.ctx.Set("shadowBlur", 10)
-	e.ctx.Set("shadowColor", hullGlow)
+	// ── Kadłub: pełne wypełnienie + obrys ──────────────────────────────────
+	// Boczna ściana powyżej wody (czarna)
+	e.ctx.Set("fillStyle", "#111821")
+	e.ctx.Call("beginPath")
+	e.ctx.Call("moveTo", -sa+sternT, 0)
+	e.ctx.Call("lineTo", -sa, -deckH)
+	e.ctx.Call("lineTo", sa, -deckH)
+	e.ctx.Call("lineTo", sa-bowS*0.25, 0)
+	e.ctx.Call("closePath")
+	e.ctx.Call("fill")
 
-	// Boczna ściana powyżej wody (pokład)
 	e.ctx.Set("strokeStyle", "#68a8da")
 	e.ctx.Set("lineWidth", 1.8)
 	e.ctx.Call("beginPath")
@@ -1051,7 +1074,17 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	e.ctx.Call("lineTo", sa-bowS*0.25, 0)
 	e.ctx.Call("stroke")
 
-	// Obrys kadłuba poniżej wody — czerwona linia
+	// Część podwodna (czerwona)
+	e.ctx.Set("fillStyle", "#7e1c12")
+	e.ctx.Call("beginPath")
+	e.ctx.Call("moveTo", -sa+sternT, 0)
+	e.ctx.Call("lineTo", -sa, hullD)
+	e.ctx.Call("lineTo", sa-bowS*0.35, hullD)
+	e.ctx.Call("lineTo", sa-bowS*0.05, hullD*0.5)
+	e.ctx.Call("lineTo", sa-bowS*0.25, 0)
+	e.ctx.Call("closePath")
+	e.ctx.Call("fill")
+
 	e.ctx.Set("strokeStyle", "#ff3b14")
 	e.ctx.Set("lineWidth", 2.1)
 	e.ctx.Call("beginPath")
@@ -1069,8 +1102,6 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	e.ctx.Call("moveTo", -sa+sternT, 0)
 	e.ctx.Call("lineTo", sa-bowS*0.25, 0)
 	e.ctx.Call("stroke")
-	e.ctx.Set("shadowBlur", 0)
-	e.ctx.Set("shadowColor", "transparent")
 
 	// Pionowe wręgi kadłuba (szkielet)
 	e.ctx.Set("strokeStyle", "rgba(58,96,144,0.35)")
@@ -1083,11 +1114,87 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	}
 	e.ctx.Call("stroke")
 
-	// ── Nadbudówka 1: mostek ──────────────────────────────────────────────
 	bw := w * 0.085
-	bx := sa*0.30 - bw/2
+	bx := sa*0.60 - bw/2
 	bh := deckH * 1.85
 	bridgeY := -deckH - bh
+
+	fw := w * 0.06
+	fx := -sa*0.74 - fw/2
+	fh := deckH * 1.45
+	fy := -deckH - fh
+
+	// ── Ładunek na pokładzie ──────────────────────────────────────────────
+	drawDeckStack := func(x, width, height float64) {
+		topY := -deckH - height
+		e.ctx.Set("fillStyle", "#b84a0a")
+		e.ctx.Call("fillRect", x, topY, width, height)
+		e.ctx.Set("fillStyle", "rgba(255,190,120,0.18)")
+		e.ctx.Call("fillRect", x, topY, width, math.Max(1, height*0.10))
+		e.ctx.Set("strokeStyle", "rgba(78,28,8,0.72)")
+		e.ctx.Set("lineWidth", 0.8)
+		e.ctx.Call("strokeRect", x+0.5, topY+0.5, width-1, height-1)
+
+		rows := int(math.Max(1, math.Round(height/7)))
+		rowH := height / float64(rows)
+		e.ctx.Set("strokeStyle", "rgba(70,24,8,0.36)")
+		e.ctx.Set("lineWidth", 0.5)
+		for i := 1; i < rows; i++ {
+			yy := topY + float64(i)*rowH
+			e.ctx.Call("beginPath")
+			e.ctx.Call("moveTo", x, yy)
+			e.ctx.Call("lineTo", x+width, yy)
+			e.ctx.Call("stroke")
+		}
+
+		ribInsetX := math.Max(1, width*0.18)
+		e.ctx.Set("fillStyle", "rgba(35,10,2,0.22)")
+		e.ctx.Call("fillRect", x+ribInsetX, topY+1, 0.6, height-2)
+		e.ctx.Call("fillRect", x+width-ribInsetX, topY+1, 0.6, height-2)
+		e.ctx.Set("fillStyle", "rgba(255,210,170,0.08)")
+		e.ctx.Call("fillRect", x+ribInsetX+0.8, topY+1, 0.5, height-2)
+		e.ctx.Call("fillRect", x+width-ribInsetX+0.8, topY+1, 0.5, height-2)
+	}
+
+	stackGap := shipW * 0.008
+	cargoStackH := maxCargoH * 0.50
+	sternLeft := shipLeft + shipW*0.012
+	sternRight := fx - shipW*0.014
+	stackW := (sternRight - sternLeft - stackGap) / 2
+	drawSegment := func(left, right float64, count int, align string) {
+		segW := right - left
+		if count < 1 || segW <= 0 {
+			return
+		}
+		width := stackW
+		usedW := float64(count)*width + float64(count-1)*stackGap
+		if width <= 2 || usedW > segW {
+			return
+		}
+		start := left + (segW-usedW)/2
+		if align == "left" {
+			start = left
+		} else if align == "right" {
+			start = right - usedW
+		}
+		for i := 0; i < count; i++ {
+			drawDeckStack(start+float64(i)*(width+stackGap), width, cargoStackH)
+		}
+	}
+
+	margin := shipW * 0.012
+	superGap := shipW * 0.014
+	midLeft := fx + fw + superGap
+	midRight := bx - superGap
+	midCount := int(math.Floor((midRight - midLeft + stackGap) / (stackW + stackGap)))
+	if midCount < 1 {
+		midCount = 1
+	}
+	drawSegment(shipLeft+margin, fx-superGap, 2, "left")
+	drawSegment(midLeft, midRight, midCount, "center")
+	drawSegment(bx+bw+superGap, shipRight-margin, 3, "right")
+
+	// ── Nadbudówka 1: mostek ──────────────────────────────────────────────
 	e.ctx.Set("fillStyle", "#b8c3ca")
 	e.ctx.Call("fillRect", bx, -deckH-bh, bw, bh)
 	e.ctx.Set("fillStyle", "rgba(255,255,255,0.14)")
@@ -1121,10 +1228,6 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	}
 
 	// ── Nadbudówka 2: komin ───────────────────────────────────────────────
-	fw := w * 0.06
-	fx := -sa*0.50 - fw/2
-	fh := deckH * 1.45
-	fy := -deckH - fh
 	e.ctx.Set("fillStyle", "#c6a21d")
 	e.ctx.Call("fillRect", fx, fy, fw, fh)
 	e.ctx.Set("fillStyle", "rgba(255,255,255,0.12)")

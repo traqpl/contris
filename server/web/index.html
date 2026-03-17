@@ -31,48 +31,78 @@
   </div>
 
   <section class="menu-screen" id="menuScreen" aria-labelledby="menuTitle">
-    <div class="menu-hero">
-      <p class="menu-kicker">Arcade Cargo Run</p>
-      <h1 id="menuTitle" class="menu-title">Cargo Shift</h1>
-      <p class="menu-subtitle">Keep the ship balanced. Fill the hull. Don&apos;t sink.</p>
-    </div>
-
-    <section class="menu-card menu-card-primary" aria-labelledby="startRunTitle">
-      <p class="menu-eyebrow">Start Run</p>
-      <h2 id="startRunTitle">Load five decks in one voyage</h2>
-      <div class="menu-facts" aria-label="Key rules">
-        <span>Green trim scores best</span>
-        <span>Red trim sinks runs</span>
-        <span>Dangerous goods explode</span>
+    <div class="menu-panel menu-panel-main" id="menuMainPanel">
+      <div class="score-ticker" id="scoreTicker" aria-label="Top scores ticker">
+        <div class="score-ticker-track" id="scoreTickerTrack">
+          <span class="score-ticker-empty">Loading scores…</span>
+        </div>
       </div>
-      <button id="startShiftBtn" class="start-btn" type="button" disabled>
-        <span class="start-btn-key">Press Space / Enter</span>
-        <span class="start-btn-copy" id="startShiftCopy">Loading bridge systems</span>
-      </button>
-      <p class="menu-hint" id="menuHint">Arrows move cargo. Up rotates. Down drops.</p>
-    </section>
 
-    <div class="menu-strip" aria-hidden="true">
-      <span>5 decks</span>
-      <span>Keep balance</span>
-      <span>Fast run</span>
+      <div class="menu-hero">
+        <p class="menu-kicker">Arcade Cargo Run</p>
+        <h1 id="menuTitle" class="menu-title">Cargo Shift</h1>
+        <p class="menu-subtitle">Keep the ship balanced. Fill the hull. Don&apos;t sink.</p>
+      </div>
+
+      <section class="menu-card menu-card-primary" aria-labelledby="startRunTitle">
+        <p class="menu-eyebrow">Start Run</p>
+        <h2 id="startRunTitle">Load five decks in one voyage</h2>
+        <div class="menu-facts" aria-label="Key rules">
+          <span>Green trim scores best</span>
+          <span>Red trim sinks runs</span>
+          <span>Dangerous goods explode</span>
+        </div>
+        <button id="startShiftBtn" class="start-btn" type="button" disabled>
+          <span class="start-btn-key">Press Space / Enter</span>
+          <span class="start-btn-copy" id="startShiftCopy">Loading bridge systems</span>
+        </button>
+        <div class="menu-actions">
+          <button id="openHallBtn" class="menu-secondary-btn" type="button">Hall of Fame</button>
+        </div>
+        <p class="menu-hint" id="menuHint">Arrows move cargo. Up rotates. Down drops.</p>
+      </section>
+
+      <div class="menu-strip" aria-hidden="true">
+        <span>5 decks</span>
+        <span>Keep balance</span>
+        <span>Fast run</span>
+      </div>
+
+      <div class="menu-controls-line" aria-label="Controls summary">
+        <span><strong>Arrows</strong> move</span>
+        <span><strong>Up</strong> rotate</span>
+        <span><strong>Down</strong> drop</span>
+        <span><strong>P / Esc</strong> pause</span>
+        <span><strong>M</strong> mute</span>
+        <span><strong>T</strong> theme</span>
+        <span><strong>H</strong> hall</span>
+      </div>
+
+      <div class="menu-dock" aria-hidden="true">
+        <canvas id="menuShipCanvas" width="490" height="88"></canvas>
+      </div>
     </div>
 
-    <div class="menu-controls-line" aria-label="Controls summary">
-      <span><strong>Arrows</strong> move</span>
-      <span><strong>Up</strong> rotate</span>
-      <span><strong>Down</strong> drop</span>
-      <span><strong>P / Esc</strong> pause</span>
-      <span><strong>M</strong> mute</span>
-      <span><strong>T</strong> theme</span>
-    </div>
+    <div class="menu-panel menu-panel-hall" id="menuHallPanel" hidden>
+      <div class="menu-hero menu-hero-hall">
+        <p class="menu-kicker">Top Runs</p>
+        <h1 class="menu-title menu-title-hall">Hall of Fame</h1>
+        <p class="menu-subtitle">Best cargo runs saved on this machine.</p>
+      </div>
 
-    <div class="menu-dock" aria-hidden="true">
-      <div class="dock-hull"></div>
-      <div class="dock-stack dock-stack-a"></div>
-      <div class="dock-stack dock-stack-b"></div>
-      <div class="dock-stack dock-stack-c"></div>
-      <div class="dock-water"></div>
+      <section class="hall-card hall-card-screen" aria-labelledby="hallTitle">
+        <div class="hall-card-head">
+          <h2 id="hallTitle">Leaderboard</h2>
+          <span class="hall-card-meta">Top runs</span>
+        </div>
+        <ol class="hall-list hall-list-screen" id="hallList">
+          <li class="hall-empty">Loading scores…</li>
+        </ol>
+      </section>
+
+      <div class="menu-actions">
+        <button id="backToMenuBtn" class="menu-secondary-btn" type="button">Back to Menu</button>
+      </div>
     </div>
   </section>
 
@@ -88,11 +118,26 @@
 <audio id="bgMusicA" preload="auto"></audio>
 <audio id="bgMusicB" preload="auto"></audio>
 
+<div class="score-modal" id="scoreModal" hidden>
+  <div class="score-modal-card" role="dialog" aria-modal="true" aria-labelledby="scoreModalTitle">
+    <p class="score-modal-kicker">Hall of Fame</p>
+    <h2 id="scoreModalTitle">Save your run</h2>
+    <p class="score-modal-copy" id="scoreSummary">Score 0 · Level 1 · Lines 0</p>
+    <label class="score-modal-label" for="nickInput">Three letters or digits</label>
+    <input id="nickInput" class="score-modal-input" type="text" maxlength="3" autocomplete="off" spellcheck="false">
+    <p class="score-modal-status" id="scoreStatus">Enter a short tag for the leaderboard.</p>
+    <div class="score-modal-actions">
+      <button id="scoreSubmitBtn" class="score-submit-btn" type="button">Save Score</button>
+      <button id="scoreSkipBtn" class="score-skip-btn" type="button">Skip</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const bgMusicA = document.getElementById('bgMusicA');
   const bgMusicB = document.getElementById('bgMusicB');
   const muteBtn = document.getElementById('muteBtn');
-  const menuMusicVolume = 0.32;
+  const menuMusicVolume = 1.0;
   const gameplayMusicVolume = 0.07;
   window.cargoShiftScene = window.cargoShiftScene || 'menu';
   const crossfadeSeconds = 2.6;
@@ -436,11 +481,78 @@
 <script>
   const monitor = document.getElementById('monitor');
   const menuScreen = document.getElementById('menuScreen');
+  const menuMainPanel = document.getElementById('menuMainPanel');
+  const menuHallPanel = document.getElementById('menuHallPanel');
   const startShiftBtn = document.getElementById('startShiftBtn');
+  const openHallBtn = document.getElementById('openHallBtn');
+  const backToMenuBtn = document.getElementById('backToMenuBtn');
   const startShiftCopy = document.getElementById('startShiftCopy');
   const menuHint = document.getElementById('menuHint');
+  const gameCanvas = document.getElementById('gameCanvas');
+  const menuShipCanvas = document.getElementById('menuShipCanvas');
+  const menuShipCtx = menuShipCanvas.getContext('2d');
+  const scoreTickerTrack = document.getElementById('scoreTickerTrack');
+  const hallList = document.getElementById('hallList');
+  const scoreModal = document.getElementById('scoreModal');
+  const scoreSummary = document.getElementById('scoreSummary');
+  const scoreStatus = document.getElementById('scoreStatus');
+  const nickInput = document.getElementById('nickInput');
+  const scoreSubmitBtn = document.getElementById('scoreSubmitBtn');
+  const scoreSkipBtn = document.getElementById('scoreSkipBtn');
   const themeSelect = document.getElementById('themeSelect');
   const themes = ['theme-amber', 'theme-green', 'theme-cyan'];
+  const nickStorageKey = 'cargo-shift-nick';
+  const hallScreenStorageKey = 'cargo-shift-menu-screen';
+  let handledEndStateKey = '';
+  let menuScreenMode = 'main';
+
+  function setMenuScreenMode(mode) {
+    menuScreenMode = mode === 'hall' ? 'hall' : 'main';
+    menuMainPanel.hidden = menuScreenMode !== 'main';
+    menuHallPanel.hidden = menuScreenMode !== 'hall';
+    try {
+      window.localStorage.setItem(hallScreenStorageKey, menuScreenMode);
+    } catch (_) {}
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  async function refreshHallOfFame() {
+    try {
+      const res = await fetch('/api/scores?n=8');
+      const scores = await res.json();
+      if (!Array.isArray(scores) || scores.length === 0) {
+        hallList.innerHTML = '<li class="hall-empty">No saved runs yet.</li>';
+        scoreTickerTrack.innerHTML = '<span class="score-ticker-empty">No saved runs yet.</span>';
+        return;
+      }
+      hallList.innerHTML = scores.map((s, index) => `
+        <li class="hall-entry">
+          <span class="hall-rank">${index + 1}.</span>
+          <span class="hall-nick">${escapeHtml(s.nick)}</span>
+          <span class="hall-score">${escapeHtml(s.score)} pts</span>
+          <span class="hall-meta">L${escapeHtml(s.level)} · ${escapeHtml(s.lines)} lines</span>
+        </li>
+      `).join('');
+      const tickerItems = scores.map((s, index) =>
+        `<span class="score-ticker-item">${index + 1}. ${escapeHtml(s.nick)} ${escapeHtml(s.score)}pt L${escapeHtml(s.level)}</span>`
+      ).join('');
+      scoreTickerTrack.innerHTML = `${tickerItems}${tickerItems}`;
+    } catch (_) {
+      hallList.innerHTML = '<li class="hall-empty">Scores unavailable.</li>';
+      scoreTickerTrack.innerHTML = '<span class="score-ticker-empty">Scores unavailable.</span>';
+    }
+  }
+
+  refreshHallOfFame();
+  window.setInterval(refreshHallOfFame, 30000);
 
   themeSelect.addEventListener('change', () => {
     themes.forEach(t => monitor.classList.remove(t));
@@ -484,11 +596,124 @@
     }
     dispatchGameKey('Space');
   });
+  openHallBtn.addEventListener('click', () => setMenuScreenMode('hall'));
+  backToMenuBtn.addEventListener('click', () => setMenuScreenMode('main'));
+
+  function closeScoreModal() {
+    scoreModal.hidden = true;
+    scoreStatus.textContent = 'Enter a short tag for the leaderboard.';
+  }
+
+  function currentResultPayload() {
+    const pending = Boolean(window.cargoShiftResultPending);
+    return {
+      state: window.cargoShiftState || 'menu',
+      pending,
+      score: Number((pending ? window.cargoShiftResultScore : window.cargoShiftScore) || 0),
+      lines: Number((pending ? window.cargoShiftResultLines : window.cargoShiftLines) || 0),
+      level: Number((pending ? window.cargoShiftResultLevel : window.cargoShiftLevel) || 1),
+    };
+  }
+
+  async function submitScore() {
+    const payload = currentResultPayload();
+    const nick = nickInput.value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{3}$/.test(nick)) {
+      scoreStatus.textContent = 'Use exactly 3 letters or digits.';
+      return;
+    }
+    scoreSubmitBtn.disabled = true;
+    scoreSkipBtn.disabled = true;
+    scoreStatus.textContent = 'Saving score...';
+    try {
+      const res = await fetch('/api/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nick,
+          score: payload.score,
+          level: payload.level,
+          lines: payload.lines,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        scoreStatus.textContent = body.error || 'Save failed.';
+      } else {
+        window.localStorage.setItem(nickStorageKey, nick);
+        scoreStatus.textContent = 'Saved.';
+        refreshHallOfFame();
+        window.setTimeout(closeScoreModal, 500);
+      }
+    } catch (_) {
+      scoreStatus.textContent = 'Save failed.';
+    } finally {
+      scoreSubmitBtn.disabled = false;
+      scoreSkipBtn.disabled = false;
+    }
+  }
+
+  scoreSubmitBtn.addEventListener('click', submitScore);
+  scoreSkipBtn.addEventListener('click', closeScoreModal);
+  scoreModal.addEventListener('keydown', (event) => {
+    event.stopPropagation();
+  });
+  nickInput.addEventListener('input', () => {
+    nickInput.value = nickInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  });
+  nickInput.addEventListener('keydown', (event) => {
+    if (event.code === 'Enter') {
+      submitScore();
+      event.preventDefault();
+    }
+  });
+
+  try {
+    nickInput.value = (window.localStorage.getItem(nickStorageKey) || '').toUpperCase().slice(0, 3);
+    setMenuScreenMode(window.localStorage.getItem(hallScreenStorageKey) || 'main');
+  } catch (_) {}
+
+  document.addEventListener('keydown', (event) => {
+    if (!monitor.classList.contains('in-menu') || scoreModal.hidden === false) {
+      return;
+    }
+    if (event.code === 'KeyH') {
+      setMenuScreenMode(menuScreenMode === 'hall' ? 'main' : 'hall');
+      event.preventDefault();
+    } else if (event.code === 'Escape' && menuScreenMode === 'hall') {
+      setMenuScreenMode('main');
+      event.preventDefault();
+    }
+  });
 
   function syncViewState() {
     const inMenu = window.cargoShiftScene !== 'game';
     monitor.classList.toggle('in-menu', inMenu);
     menuScreen.setAttribute('aria-hidden', inMenu ? 'false' : 'true');
+    if (menuShipCtx) {
+      menuShipCtx.clearRect(0, 0, menuShipCanvas.width, menuShipCanvas.height);
+      menuShipCtx.drawImage(
+        gameCanvas,
+        0, 624, 490, 88,
+        0, 0, menuShipCanvas.width, menuShipCanvas.height
+      );
+    }
+    const result = currentResultPayload();
+    const endState = result.pending || result.state === 'game_over' || result.state === 'victory';
+    const endStateKey = `${result.state}:${result.pending}:${result.score}:${result.lines}:${result.level}`;
+    if (endState && (result.score > 0 || result.lines > 0) && handledEndStateKey !== endStateKey) {
+      handledEndStateKey = endStateKey;
+      scoreSummary.textContent = `Score ${result.score} · Level ${result.level} · Lines ${result.lines}`;
+      scoreStatus.textContent = 'Enter a short tag for the leaderboard.';
+      scoreModal.hidden = false;
+      window.setTimeout(() => nickInput.focus(), 0);
+    }
+    if (result.state === 'playing') {
+      handledEndStateKey = '';
+    }
+    if ((result.state === 'menu' && !result.pending) || result.state === 'playing') {
+      closeScoreModal();
+    }
     window.requestAnimationFrame(syncViewState);
   }
 
