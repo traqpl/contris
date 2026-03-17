@@ -124,11 +124,14 @@ func newDef(d PieceDef) PieceDef {
 	shape := copyShape(d.Shape)
 	wear := make([]int, len(shape))
 	for i := range wear {
-		v := rand.Intn(100) // 0–99; tylko v>=98 (~2%) daje wear==3
-		if v >= 98 {
+		v := rand.Intn(100)
+		switch {
+		case v >= 92:
 			wear[i] = 3
-		} else {
-			wear[i] = v % 3 // 0–2: brak/drobne deformacje
+		case v >= 72:
+			wear[i] = 2
+		default:
+			wear[i] = 0
 		}
 	}
 	return PieceDef{Shape: shape, Wear: wear, Co: d.Co, Label: d.Label, W: d.W}

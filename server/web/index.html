@@ -41,11 +41,9 @@
       <div class="menu-hero">
         <p class="menu-kicker">Arcade Cargo Run</p>
         <h1 id="menuTitle" class="menu-title">Cargo Shift</h1>
-        <p class="menu-subtitle">Keep the ship balanced. Fill the hull. Don&apos;t sink.</p>
       </div>
 
       <section class="menu-card menu-card-primary" aria-labelledby="startRunTitle">
-        <p class="menu-eyebrow">Start Run</p>
         <h2 id="startRunTitle">Load five decks in one voyage</h2>
         <div class="menu-facts" aria-label="Key rules">
           <span>Green trim scores best</span>
@@ -79,7 +77,7 @@
       </div>
 
       <div class="menu-dock" aria-hidden="true">
-        <canvas id="menuShipCanvas" width="490" height="88"></canvas>
+        <canvas id="menuShipCanvas" width="522" height="88"></canvas>
       </div>
     </div>
 
@@ -107,7 +105,7 @@
   </section>
 
   <div class="canvas-wrap">
-    <canvas id="gameCanvas" width="490" height="712"></canvas>
+    <canvas id="gameCanvas" width="522" height="712"></canvas>
     <div id="loading">LOADING...</div>
   </div>
 
@@ -137,11 +135,10 @@
   const bgMusicA = document.getElementById('bgMusicA');
   const bgMusicB = document.getElementById('bgMusicB');
   const muteBtn = document.getElementById('muteBtn');
-  const menuMusicVolume = 1.0;
+  const menuMusicVolume = 0.82;
   const gameplayMusicVolume = 0.07;
   window.cargoShiftScene = window.cargoShiftScene || 'menu';
-  const crossfadeSeconds = 2.6;
-  const audioFadeRate = 3.2;
+  const crossfadeSeconds = 4.8;
 
   const menuTrack = { mp3: 'menu.mp3' };
   const gameplayPlaylist = [
@@ -162,6 +159,10 @@
   let activeTrackKind = '';
   let nextPreparedTrack = null;
   let fadeState = null;
+
+  function absoluteUrl(url) {
+    return url ? new URL(url, window.location.href).href : '';
+  }
 
   [bgMusicA, bgMusicB].forEach((audio) => {
     audio.volume = 0;
@@ -243,11 +244,13 @@
     if (!url) {
       return false;
     }
-    if (audio.src !== new URL(url, window.location.href).href) {
+    const targetUrl = absoluteUrl(url);
+    const currentUrl = audio.currentSrc || audio.src;
+    if (currentUrl !== targetUrl) {
       audio.src = url;
+      audio.load();
     }
     audio.loop = loop;
-    audio.load();
     return true;
   }
 
@@ -265,8 +268,11 @@
       return;
     }
     const standbyUrl = standbyPlayer.currentSrc || standbyPlayer.src;
-    const targetUrl = new URL(url, window.location.href).href;
+    const targetUrl = absoluteUrl(url);
     const alreadyPrepared = standbyUrl === targetUrl;
+    if (standbyPlayer.readyState < 2) {
+      return;
+    }
 
     nextPreparedTrack = null;
     standbyPlayer.pause();
@@ -365,7 +371,7 @@
     if (!fadeState) {
       return;
     }
-    const step = Math.min(1, dt * audioFadeRate);
+    const step = Math.min(1, dt / crossfadeSeconds);
     fadeState.from.volume = Math.max(0, fadeState.from.volume - fadeState.targetVolume * step);
     fadeState.to.volume = Math.min(fadeState.targetVolume, fadeState.to.volume + fadeState.targetVolume * step);
     if (fadeState.from.volume <= 0.001 && fadeState.to.volume >= fadeState.targetVolume - 0.001) {
@@ -395,7 +401,7 @@
     if (!nextPreparedTrack) {
       queueGameplayTrack(nextTrackIndex());
     }
-    if (nextPreparedTrack) {
+    if (nextPreparedTrack && standbyPlayer.readyState >= 2) {
       currentTrack = nextPreparedTrack.index;
       beginCrossfade(nextPreparedTrack.url, nextPreparedTrack.kind, { loop: false });
     }
@@ -432,6 +438,21 @@
       }
       const fallbackIndex = nextPreparedTrack ? nextPreparedTrack.index : nextTrackIndex();
       loadGameplayTrack(fallbackIndex);
+    });
+    audio.addEventListener('canplay', () => {
+      if (
+        activeScene() === 'game'
+        && !fadeState
+        && activeTrackKind === 'gameplay'
+        && nextPreparedTrack
+        && audio === standbyPlayer
+        && Number.isFinite(activePlayer.duration)
+        && activePlayer.duration > 0
+        && activePlayer.duration-activePlayer.currentTime <= crossfadeSeconds
+      ) {
+        currentTrack = nextPreparedTrack.index;
+        beginCrossfade(nextPreparedTrack.url, nextPreparedTrack.kind, { loop: false });
+      }
     });
   });
 
@@ -488,7 +509,6 @@
   const backToMenuBtn = document.getElementById('backToMenuBtn');
   const startShiftCopy = document.getElementById('startShiftCopy');
   const menuHint = document.getElementById('menuHint');
-  const gameCanvas = document.getElementById('gameCanvas');
   const menuShipCanvas = document.getElementById('menuShipCanvas');
   const menuShipCtx = menuShipCanvas.getContext('2d');
   const scoreTickerTrack = document.getElementById('scoreTickerTrack');
@@ -673,6 +693,136 @@
     setMenuScreenMode(window.localStorage.getItem(hallScreenStorageKey) || 'main');
   } catch (_) {}
 
+  function drawMenuContainer(x, y, w, h, tone) {
+    const fill = tone === 'white' ? '#d8dde0' : '#d98616';
+    const shadow = tone === 'white' ? 'rgba(96,106,114,0.26)' : 'rgba(92,48,6,0.34)';
+    const border = tone === 'white' ? 'rgba(246,248,250,0.62)' : 'rgba(255,194,94,0.52)';
+    menuShipCtx.fillStyle = fill;
+    menuShipCtx.fillRect(x, y, w, h);
+    menuShipCtx.fillStyle = 'rgba(255,255,255,0.10)';
+    menuShipCtx.fillRect(x, y, w, Math.max(1, h * 0.12));
+    menuShipCtx.strokeStyle = border;
+    menuShipCtx.lineWidth = 1;
+    menuShipCtx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    menuShipCtx.strokeStyle = shadow;
+    menuShipCtx.lineWidth = 0.7;
+    const rows = Math.max(1, Math.floor(h / 8));
+    for (let i = 1; i < rows; i += 1) {
+      const yy = y + (h * i) / rows;
+      menuShipCtx.beginPath();
+      menuShipCtx.moveTo(x, yy);
+      menuShipCtx.lineTo(x + w, yy);
+      menuShipCtx.stroke();
+    }
+    const ribInset = Math.max(1, w * 0.18);
+    menuShipCtx.fillStyle = shadow;
+    menuShipCtx.fillRect(x + ribInset, y + 1, 0.8, h - 2);
+    menuShipCtx.fillRect(x + w - ribInset, y + 1, 0.8, h - 2);
+  }
+
+  function drawMenuShip() {
+    if (!menuShipCtx) {
+      return;
+    }
+    const w = menuShipCanvas.width;
+    const h = menuShipCanvas.height;
+    menuShipCtx.clearRect(0, 0, w, h);
+    menuShipCtx.fillStyle = '#060c12';
+    menuShipCtx.fillRect(0, 0, w, h);
+
+    const waterY = 54;
+    const shipLeft = 26;
+    const shipRight = w - 24;
+    const deckY = 36;
+    const hullBottom = 72;
+
+    menuShipCtx.fillStyle = 'rgba(8,28,55,0.72)';
+    menuShipCtx.fillRect(0, waterY, w, h - waterY);
+    menuShipCtx.strokeStyle = 'rgba(80,160,220,0.28)';
+    menuShipCtx.lineWidth = 1;
+    menuShipCtx.beginPath();
+    menuShipCtx.moveTo(0, waterY);
+    menuShipCtx.lineTo(w, waterY);
+    menuShipCtx.stroke();
+
+    menuShipCtx.fillStyle = '#111821';
+    menuShipCtx.beginPath();
+    menuShipCtx.moveTo(shipLeft + 6, waterY);
+    menuShipCtx.lineTo(shipLeft, deckY);
+    menuShipCtx.lineTo(shipRight, deckY);
+    menuShipCtx.lineTo(shipRight - 18, waterY);
+    menuShipCtx.closePath();
+    menuShipCtx.fill();
+    menuShipCtx.strokeStyle = '#68a8da';
+    menuShipCtx.lineWidth = 1.6;
+    menuShipCtx.stroke();
+
+    menuShipCtx.fillStyle = '#7e1c12';
+    menuShipCtx.beginPath();
+    menuShipCtx.moveTo(shipLeft + 6, waterY);
+    menuShipCtx.lineTo(shipLeft, hullBottom);
+    menuShipCtx.lineTo(shipRight - 28, hullBottom);
+    menuShipCtx.lineTo(shipRight - 6, waterY + 7);
+    menuShipCtx.lineTo(shipRight - 18, waterY);
+    menuShipCtx.closePath();
+    menuShipCtx.fill();
+    menuShipCtx.strokeStyle = '#ff3b14';
+    menuShipCtx.lineWidth = 1.8;
+    menuShipCtx.stroke();
+
+    menuShipCtx.strokeStyle = '#9ce8ff';
+    menuShipCtx.lineWidth = 1.2;
+    menuShipCtx.beginPath();
+    menuShipCtx.moveTo(shipLeft + 6, waterY);
+    menuShipCtx.lineTo(shipRight - 18, waterY);
+    menuShipCtx.stroke();
+
+    const funnelX = 98;
+    const funnelW = 20;
+    const bridgeX = w - 118;
+    const bridgeW = 28;
+    const superGap = 8;
+    const stackGap = 4;
+    const stackW = 18;
+    const stackH = 22;
+
+    const drawSegment = (left, right) => {
+      const available = right - left;
+      const count = Math.max(1, Math.floor((available + stackGap) / (stackW + stackGap)));
+      const used = count * stackW + (count - 1) * stackGap;
+      const start = left + (available - used) / 2;
+      for (let i = 0; i < count; i += 1) {
+        drawMenuContainer(start + i * (stackW + stackGap), deckY - stackH, stackW, stackH, 'orange');
+      }
+    };
+
+    drawSegment(shipLeft + 10, funnelX - superGap);
+    drawSegment(funnelX + funnelW + superGap, bridgeX - superGap);
+    drawSegment(bridgeX + bridgeW + superGap, shipRight - 10);
+
+    menuShipCtx.fillStyle = '#c6a21d';
+    menuShipCtx.fillRect(funnelX, deckY - 22, funnelW, 22);
+    menuShipCtx.fillStyle = '#1a1a1a';
+    menuShipCtx.fillRect(funnelX + 4, deckY - 28, funnelW - 8, 8);
+    menuShipCtx.fillStyle = '#c03010';
+    menuShipCtx.fillRect(funnelX + 4, deckY - 24, funnelW - 8, 2.5);
+
+    menuShipCtx.fillStyle = '#b8c3ca';
+    menuShipCtx.fillRect(bridgeX, deckY - 28, bridgeW, 28);
+    menuShipCtx.fillStyle = '#284f76';
+    menuShipCtx.fillRect(bridgeX + 2, deckY - 24, bridgeW - 4, 8);
+    menuShipCtx.strokeStyle = '#8ea2b4';
+    menuShipCtx.lineWidth = 1;
+    menuShipCtx.strokeRect(bridgeX + 0.5, deckY - 27.5, bridgeW - 1, 27);
+    menuShipCtx.fillStyle = '#aeb8bf';
+    menuShipCtx.fillRect(bridgeX + 5, deckY - 31, bridgeW - 10, 3);
+    menuShipCtx.strokeStyle = '#9fb8c8';
+    menuShipCtx.beginPath();
+    menuShipCtx.moveTo(bridgeX + bridgeW / 2, deckY - 31);
+    menuShipCtx.lineTo(bridgeX + bridgeW / 2, deckY - 39);
+    menuShipCtx.stroke();
+  }
+
   document.addEventListener('keydown', (event) => {
     if (!monitor.classList.contains('in-menu') || scoreModal.hidden === false) {
       return;
@@ -691,12 +841,7 @@
     monitor.classList.toggle('in-menu', inMenu);
     menuScreen.setAttribute('aria-hidden', inMenu ? 'false' : 'true');
     if (menuShipCtx) {
-      menuShipCtx.clearRect(0, 0, menuShipCanvas.width, menuShipCanvas.height);
-      menuShipCtx.drawImage(
-        gameCanvas,
-        0, 624, 490, 88,
-        0, 0, menuShipCanvas.width, menuShipCanvas.height
-      );
+      drawMenuShip();
     }
     const result = currentResultPayload();
     const endState = result.pending || result.state === 'game_over' || result.state === 'victory';

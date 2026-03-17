@@ -417,6 +417,52 @@ func (e *Engine) renderBoard() {
 			e.drawCell(boardX+float64(c)*CELL, boardY+float64(r)*CELL, CELL, cell.Co, 1.0, cell.Wear, c, r, cell.RibH, e.rowFrozenTime(r) > 0)
 		}
 	}
+	seenReefer := map[int]bool{}
+	for r := 0; r < ROWS; r++ {
+		for c := 0; c < COLS; c++ {
+			cell := e.grid[r][c]
+			if cell == nil || cell.Co != "reef" || seenReefer[cell.Pid] {
+				continue
+			}
+			seenReefer[cell.Pid] = true
+			minR, minC := ROWS, COLS
+			maxR, maxC := -1, -1
+			frozen := false
+			for rr := 0; rr < ROWS; rr++ {
+				for cc := 0; cc < COLS; cc++ {
+					other := e.grid[rr][cc]
+					if other == nil || other.Pid != cell.Pid {
+						continue
+					}
+					if rr < minR {
+						minR = rr
+					}
+					if cc < minC {
+						minC = cc
+					}
+					if rr > maxR {
+						maxR = rr
+					}
+					if cc > maxC {
+						maxC = cc
+					}
+					if e.rowFrozenTime(rr) > 0 {
+						frozen = true
+					}
+				}
+			}
+			if maxR >= minR && maxC >= minC {
+				e.drawReeferOverlayRect(
+					boardX+float64(minC)*CELL,
+					boardY+float64(minR)*CELL,
+					float64(maxC-minC+1)*CELL,
+					float64(maxR-minR+1)*CELL,
+					1.0,
+					frozen,
+				)
+			}
+		}
+	}
 
 	// Row score labels
 	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", 9.0, uiFontBody))
@@ -469,6 +515,17 @@ func (e *Engine) renderBoard() {
 				CELL, e.cur.Co, 0.18, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH, e.rowFrozenTime(gr+v.R) > 0,
 			)
 		}
+		if e.cur.Co == "reef" {
+			gx, gy, gw, gh := reeferBounds(e.cur.Shape, gr, e.cur.C, CELL, boardX, boardY)
+			frozen := false
+			for _, v := range e.cur.Shape {
+				if e.rowFrozenTime(gr+v.R) > 0 {
+					frozen = true
+					break
+				}
+			}
+			e.drawReeferOverlayRect(gx, gy, gw, gh, 0.18, frozen)
+		}
 	}
 
 	// Active piece
@@ -478,6 +535,17 @@ func (e *Engine) renderBoard() {
 			boardY+float64(e.cur.R+v.R)*CELL,
 			CELL, e.cur.Co, 1.0, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH, e.rowFrozenTime(e.cur.R+v.R) > 0,
 		)
+	}
+	if e.cur.Co == "reef" {
+		ax, ay, aw, ah := reeferBounds(e.cur.Shape, e.cur.R, e.cur.C, CELL, boardX, boardY)
+		frozen := false
+		for _, v := range e.cur.Shape {
+			if e.rowFrozenTime(e.cur.R+v.R) > 0 {
+				frozen = true
+				break
+			}
+		}
+		e.drawReeferOverlayRect(ax, ay, aw, ah, 1.0, frozen)
 	}
 
 	// Active piece outline
@@ -518,25 +586,16 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 	e.ctx.Call("fillRect", x, y, sz, sz)
 
 	switch co {
-	case "haz", "reef":
+	case "haz":
 		// Specjalne: ramka + ikona
-		if co == "haz" {
-			e.ctx.Set("strokeStyle", "#ff8800")
-			e.ctx.Set("fillStyle", "#ffcc00")
-		} else {
-			e.ctx.Set("strokeStyle", "#72ecff")
-			e.ctx.Set("fillStyle", "#d9fbff")
-		}
+		e.ctx.Set("strokeStyle", "#ff8800")
+		e.ctx.Set("fillStyle", "#ffcc00")
 		e.ctx.Set("lineWidth", 1.5)
 		e.ctx.Call("strokeRect", x+2, y+2, sz-4, sz-4)
-		icon := "⚠"
-		if co == "reef" {
-			icon = "❄"
-		}
 		e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", sz*0.56, uiFontBody))
 		e.ctx.Set("textAlign", "center")
 		e.ctx.Set("textBaseline", "middle")
-		e.ctx.Call("fillText", icon, x+sz/2, y+sz/2)
+		e.ctx.Call("fillText", "⚠", x+sz/2, y+sz/2)
 
 	default:
 		// ── Kontener właściwy ─────────────────────────────────────────────
@@ -548,9 +607,14 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 			h = -h
 		}
 
-		// ── ~1% kontenerów lekko odgiętych (warp) ────────────────────────
-		if h%100 < 1 {
-			warpPx := float64(1 + (h>>10)%2)
+		// ── Odgięcia krawędzi jako część zużycia ─────────────────────────
+		warpPx := 0.0
+		if wear >= 3 {
+			warpPx = float64(2 + (h>>10)%2)
+		} else if wear == 2 && h%100 < 35 {
+			warpPx = float64(1 + (h>>10)%2)
+		}
+		if warpPx != 0 {
 			if (h>>12)%2 == 0 {
 				warpPx = -warpPx
 			}
@@ -675,6 +739,50 @@ func (e *Engine) drawShapeOutline(cells []Vec2, offR, offC int, color string, lw
 	e.ctx.Call("stroke")
 }
 
+func (e *Engine) drawReeferOverlayRect(x, y, w, h, alpha float64, frozen bool) {
+	e.ctx.Call("save")
+	if alpha < 1.0 {
+		e.ctx.Set("globalAlpha", alpha)
+	}
+	if frozen {
+		e.ctx.Set("fillStyle", "rgba(150, 225, 255, 0.12)")
+		e.ctx.Call("fillRect", x+1, y+1, w-2, h-2)
+	}
+	e.ctx.Set("strokeStyle", "#72ecff")
+	e.ctx.Set("lineWidth", 1.5)
+	e.ctx.Call("strokeRect", x+2, y+2, w-4, h-4)
+	e.ctx.Set("fillStyle", "#d9fbff")
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", math.Min(w, h)*0.56, uiFontBody))
+	e.ctx.Set("textAlign", "center")
+	e.ctx.Set("textBaseline", "middle")
+	e.ctx.Call("fillText", "❄", x+w/2, y+h/2)
+	e.ctx.Call("restore")
+}
+
+func reeferBounds(cells []Vec2, offR, offC int, cellSz, baseX, baseY float64) (float64, float64, float64, float64) {
+	minR, minC := cells[0].R, cells[0].C
+	maxR, maxC := cells[0].R, cells[0].C
+	for _, v := range cells[1:] {
+		if v.R < minR {
+			minR = v.R
+		}
+		if v.C < minC {
+			minC = v.C
+		}
+		if v.R > maxR {
+			maxR = v.R
+		}
+		if v.C > maxC {
+			maxC = v.C
+		}
+	}
+	x := baseX + float64(offC+minC)*cellSz
+	y := baseY + float64(offR+minR)*cellSz
+	w := float64(maxC-minC+1) * cellSz
+	h := float64(maxR-minR+1) * cellSz
+	return x, y, w, h
+}
+
 // ── sidebar ───────────────────────────────────────────────────────────────────
 
 func (e *Engine) renderSidebar() {
@@ -709,35 +817,40 @@ func (e *Engine) renderSidebar() {
 		for i, v := range e.next.Shape {
 			e.drawCell(ox+float64(v.C)*s, oy+float64(v.R)*s, s, e.next.Co, 1.0, e.next.Wear[i], v.C, v.R, nextRibH, false)
 		}
-		e.ctx.Set("strokeStyle", coOutline[e.next.Co])
-		e.ctx.Set("lineWidth", 1.5)
-		e.ctx.Call("beginPath")
-		type key2 struct{ r, c int }
-		set := map[key2]bool{}
-		for _, v := range e.next.Shape {
-			set[key2{v.R, v.C}] = true
+		if e.next.Co == "reef" {
+			rx, ry, rw, rh := reeferBounds(e.next.Shape, 0, 0, s, ox, oy)
+			e.drawReeferOverlayRect(rx, ry, rw, rh, 1.0, false)
+		} else {
+			e.ctx.Set("strokeStyle", coOutline[e.next.Co])
+			e.ctx.Set("lineWidth", 1.5)
+			e.ctx.Call("beginPath")
+			type key2 struct{ r, c int }
+			set := map[key2]bool{}
+			for _, v := range e.next.Shape {
+				set[key2{v.R, v.C}] = true
+			}
+			for _, v := range e.next.Shape {
+				nx2 := ox + float64(v.C)*s
+				ny2 := oy + float64(v.R)*s
+				if !set[key2{v.R - 1, v.C}] {
+					e.ctx.Call("moveTo", nx2, ny2)
+					e.ctx.Call("lineTo", nx2+s, ny2)
+				}
+				if !set[key2{v.R + 1, v.C}] {
+					e.ctx.Call("moveTo", nx2, ny2+s)
+					e.ctx.Call("lineTo", nx2+s, ny2+s)
+				}
+				if !set[key2{v.R, v.C - 1}] {
+					e.ctx.Call("moveTo", nx2, ny2)
+					e.ctx.Call("lineTo", nx2, ny2+s)
+				}
+				if !set[key2{v.R, v.C + 1}] {
+					e.ctx.Call("moveTo", nx2+s, ny2)
+					e.ctx.Call("lineTo", nx2+s, ny2+s)
+				}
+			}
+			e.ctx.Call("stroke")
 		}
-		for _, v := range e.next.Shape {
-			nx2 := ox + float64(v.C)*s
-			ny2 := oy + float64(v.R)*s
-			if !set[key2{v.R - 1, v.C}] {
-				e.ctx.Call("moveTo", nx2, ny2)
-				e.ctx.Call("lineTo", nx2+s, ny2)
-			}
-			if !set[key2{v.R + 1, v.C}] {
-				e.ctx.Call("moveTo", nx2, ny2+s)
-				e.ctx.Call("lineTo", nx2+s, ny2+s)
-			}
-			if !set[key2{v.R, v.C - 1}] {
-				e.ctx.Call("moveTo", nx2, ny2)
-				e.ctx.Call("lineTo", nx2, ny2+s)
-			}
-			if !set[key2{v.R, v.C + 1}] {
-				e.ctx.Call("moveTo", nx2+s, ny2)
-				e.ctx.Call("lineTo", nx2+s, ny2+s)
-			}
-		}
-		e.ctx.Call("stroke")
 	}
 	y += 70
 
@@ -816,12 +929,17 @@ func (e *Engine) renderSidebar() {
 	sepLine(8)
 
 	// ── Rules + shortcuts — przypięte do dołu ───────────────────────────
-	rules := []string{
-		"GREEN  clear row = 200",
-		"YELLOW clear row = 100",
-		"RED    no row clear",
-		"DG pair explodes = -50",
-		"REEFER 2TU freezes row = 20s",
+	type ruleItem struct {
+		left  string
+		right string
+		icon  string
+	}
+	rules := []ruleItem{
+		{left: "GREEN  clear row", right: "200"},
+		{left: "YELLOW clear row", right: "100"},
+		{left: "RED    no row clear", right: ""},
+		{left: "DG pair explodes", right: "-50", icon: "haz"},
+		{left: "REEFER freezes row", right: "20s", icon: "reef"},
 	}
 	shortcuts := []struct{ key, action string }{
 		{"ARROWS", "move"},
@@ -861,17 +979,17 @@ func (e *Engine) renderSidebar() {
 	e.text("RULES", x+sideW/2, y+18, 14, "center")
 	y += 30
 
-	for _, line := range rules {
-		parts := strings.SplitN(line, "=", 2)
-		left := strings.TrimSpace(parts[0])
-		right := ""
-		if len(parts) > 1 {
-			right = strings.TrimSpace(parts[1])
+	for _, rule := range rules {
+		leftX := panelX + 8.0
+		if rule.icon != "" {
+			iconSz := 14.0
+			e.drawCell(leftX, y+1, iconSz, rule.icon, 1.0, 0, 0, 0, false, false)
+			leftX += iconSz + 6
 		}
-		e.crispGlow(left, panelX+8, y+12, 11, "left", color)
-		if right != "" {
+		e.crispGlow(rule.left, leftX, y+12, 11, "left", color)
+		if rule.right != "" {
 			e.ctx.Set("fillStyle", "#607888")
-			e.text(right, panelX+panelW-8, y+12, 11, "right")
+			e.text(rule.right, panelX+panelW-8, y+12, 11, "right")
 		}
 		y += ruleLineH
 	}
@@ -1002,57 +1120,11 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	bowS := deckH * 1.05
 	sternT := 3.0
 	maxCargoH := h * 0.45 // cały obszar od pokładu w górę
-	stackTop := -deckH - maxCargoH
-	stackBottom := hullD
-	stackH := stackBottom - stackTop
 
 	shipLeft := -sa + sternT
 	shipRight := sa - bowS*0.2
 	shipW := shipRight - shipLeft
 	cellW := shipW / COLS
-	layerH := stackH / float64(MaxLevel)
-
-	// ── Completed campaign cargo layers ───────────────────────────────────
-	for layer := 0; layer < e.completedShipLayers; layer++ {
-		layerY := stackBottom - float64(layer+1)*layerH
-
-		e.ctx.Set("fillStyle", "#a94710")
-		e.ctx.Call("fillRect", shipLeft+0.5, layerY+0.5, shipW-1, layerH-1)
-
-		e.ctx.Set("fillStyle", "rgba(255,190,120,0.16)")
-		e.ctx.Call("fillRect", shipLeft+0.5, layerY+0.5, shipW-1, math.Max(1, layerH*0.12))
-
-		e.ctx.Set("strokeStyle", "rgba(55,18,5,0.65)")
-		e.ctx.Set("lineWidth", 0.8)
-		e.ctx.Call("strokeRect", shipLeft+0.5, layerY+0.5, shipW-1, layerH-1)
-
-		e.ctx.Set("strokeStyle", "rgba(70,24,8,0.36)")
-		e.ctx.Set("lineWidth", 0.5)
-		for c := 0; c < COLS; c++ {
-			cx := shipLeft + float64(c)*cellW
-			e.ctx.Call("strokeRect", cx+0.5, layerY+0.5, cellW-1, layerH-1)
-
-			ribInsetX := math.Max(1, cellW*0.18)
-			e.ctx.Set("fillStyle", "rgba(35,10,2,0.22)")
-			e.ctx.Call("fillRect", cx+ribInsetX, layerY+1, 0.6, layerH-2)
-			e.ctx.Call("fillRect", cx+cellW-ribInsetX, layerY+1, 0.6, layerH-2)
-			e.ctx.Set("fillStyle", "rgba(255,210,170,0.08)")
-			e.ctx.Call("fillRect", cx+ribInsetX+0.8, layerY+1, 0.5, layerH-2)
-			e.ctx.Call("fillRect", cx+cellW-ribInsetX+0.8, layerY+1, 0.5, layerH-2)
-		}
-	}
-
-	if e.completedShipLayers > 0 {
-		e.ctx.Set("strokeStyle", "rgba(255,184,96,0.42)")
-		e.ctx.Set("lineWidth", 1)
-		for layer := 1; layer < e.completedShipLayers; layer++ {
-			sepY := stackBottom - float64(layer)*layerH
-			e.ctx.Call("beginPath")
-			e.ctx.Call("moveTo", shipLeft, sepY)
-			e.ctx.Call("lineTo", shipLeft+shipW, sepY)
-			e.ctx.Call("stroke")
-		}
-	}
 
 	// ── Kadłub: pełne wypełnienie + obrys ──────────────────────────────────
 	// Boczna ściana powyżej wody (czarna)
@@ -1124,9 +1196,8 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	fh := deckH * 1.45
 	fy := -deckH - fh
 
-	// ── Ładunek na pokładzie ──────────────────────────────────────────────
-	drawDeckStack := func(x, width, height float64) {
-		topY := -deckH - height
+	drawCargoColumn := func(x, width, baseY, height float64) {
+		topY := baseY - height
 		e.ctx.Set("fillStyle", "#b84a0a")
 		e.ctx.Call("fillRect", x, topY, width, height)
 		e.ctx.Set("fillStyle", "rgba(255,190,120,0.18)")
@@ -1157,11 +1228,10 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	}
 
 	stackGap := shipW * 0.008
-	cargoStackH := maxCargoH * 0.50
 	sternLeft := shipLeft + shipW*0.012
 	sternRight := fx - shipW*0.014
 	stackW := (sternRight - sternLeft - stackGap) / 2
-	drawSegment := func(left, right float64, count int, align string) {
+	drawSegment := func(left, right float64, count int, align string, baseY, height float64) {
 		segW := right - left
 		if count < 1 || segW <= 0 {
 			return
@@ -1178,7 +1248,7 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 			start = right - usedW
 		}
 		for i := 0; i < count; i++ {
-			drawDeckStack(start+float64(i)*(width+stackGap), width, cargoStackH)
+			drawCargoColumn(start+float64(i)*(width+stackGap), width, baseY, height)
 		}
 	}
 
@@ -1190,9 +1260,23 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	if midCount < 1 {
 		midCount = 1
 	}
-	drawSegment(shipLeft+margin, fx-superGap, 2, "left")
-	drawSegment(midLeft, midRight, midCount, "center")
-	drawSegment(bx+bw+superGap, shipRight-margin, 3, "right")
+
+	// ── Ukończone levele: ładunek rośnie od dna kadłuba ───────────────────
+	if e.completedShipLayers > 0 {
+		fillTopY := math.Min(bridgeY+bh*0.34, fy+fh*0.26)
+		lowerTopY := math.Max(bridgeY+bh*0.58, fy+fh*0.58)
+		lowerRangeH := hullD - lowerTopY
+		upperRangeH := lowerTopY - fillTopY
+		holdFillH := 0.0
+		if e.completedShipLayers <= 3 {
+			holdFillH = lowerRangeH * float64(e.completedShipLayers) / 3.0
+		} else {
+			holdFillH = lowerRangeH + upperRangeH*float64(e.completedShipLayers-3)/2.0
+		}
+		drawSegment(shipLeft+margin, fx-superGap, 2, "left", hullD, holdFillH)
+		drawSegment(midLeft, midRight, midCount, "center", hullD, holdFillH)
+		drawSegment(bx+bw+superGap, shipRight-margin, 3, "right", hullD, holdFillH)
+	}
 
 	// ── Nadbudówka 1: mostek ──────────────────────────────────────────────
 	e.ctx.Set("fillStyle", "#b8c3ca")
