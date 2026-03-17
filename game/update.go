@@ -9,6 +9,10 @@ func (e *Engine) Update(dt float64) {
 		return
 	}
 
+	for r := 0; r < ROWS; r++ {
+		e.rowFreeze[r] = math.Max(0, e.rowFreeze[r]-dt)
+	}
+
 	levelDurationLimit := levelDuration(e.level)
 	if !e.levelEndPending {
 		e.levelTimer += dt
@@ -107,10 +111,25 @@ func (e *Engine) lock() {
 	e.pidCount++
 	h, w := shapeDims(e.cur.Shape)
 	ribH := h > w // więcej wierszy niż kolumn → kontener pionowy → żebra poziome
+	freezeRows := map[int]bool{}
 	for i, v := range e.cur.Shape {
 		r, c := e.cur.R+v.R, e.cur.C+v.C
 		if r >= 0 && r < ROWS {
-			e.grid[r][c] = &Cell{Co: e.cur.Co, Pid: pid, Wear: e.cur.Wear[i], RibH: ribH}
+			cell := &Cell{Co: e.cur.Co, Pid: pid, Wear: e.cur.Wear[i], RibH: ribH}
+			if e.cur.Co == "reef" {
+				freezeRows[r] = true
+			}
+			e.grid[r][c] = cell
+		}
+	}
+	if e.cur.Co == "reef" {
+		for r := range freezeRows {
+			e.rowFreeze[r] = ReeferFreezeDuration
+		}
+		e.flash = &FlashMsg{
+			Text:  "❄  ROW FROZEN",
+			Color: "#44ddff",
+			T:     2.2,
 		}
 	}
 	e.processBoard()
@@ -134,10 +153,6 @@ func (e *Engine) lock() {
 func (e *Engine) processBoard() {
 	e.rebuildBodies()
 	if e.activateHaz() {
-		e.rebuildBodies()
-		e.applyGravity()
-	}
-	if e.activateReef() {
 		e.rebuildBodies()
 		e.applyGravity()
 	}
@@ -210,8 +225,11 @@ func heelZone(h float64, level int) string {
 
 type rowResult struct {
 	pts  int
-	mono bool
 	zone string
+}
+
+func (e *Engine) rowFrozenTime(r int) float64 {
+	return e.rowFreeze[r]
 }
 
 func (e *Engine) evalRow(r int, heel float64) *rowResult {
@@ -225,46 +243,34 @@ func (e *Engine) evalRow(r int, heel float64) *rowResult {
 			return nil
 		}
 	}
+	if e.rowFrozenTime(r) > 0 {
+		return nil
+	}
 	zone := heelZone(heel, e.level)
 	if zone == "red" {
 		return nil
 	}
-	cos := map[string]bool{}
-	for _, cell := range e.grid[r] {
-		if cell.Co == "orange" || cell.Co == "white" {
-			cos[cell.Co] = true
-		}
-	}
-	mono := len(cos) <= 1
-	pts := 0
-	switch {
-	case mono && zone == "green":
-		pts = 400
-	case mono && zone == "yellow":
+	pts := 100
+	if zone == "green" {
 		pts = 200
-	case !mono && zone == "green":
-		pts = 150
-	default:
-		pts = 80
 	}
-	return &rowResult{pts: pts, mono: mono, zone: zone}
+	return &rowResult{pts: pts, zone: zone}
 }
 
 func (e *Engine) clearRows() int {
 	heel := e.gridHeel()
-	cleared, totalPts, lastZone := 0, 0, ""
+	cleared, totalPts := 0, 0
 
 	for r := ROWS - 1; r >= 0; r-- {
 		res := e.evalRow(r, heel)
 		if res == nil {
 			continue
 		}
-		pts := res.pts * (cleared + 1)
+		pts := res.pts
 		e.score += pts
 		totalPts += pts
 		e.lines++
 		cleared++
-		lastZone = res.zone
 
 		// Remove row, prepend empty
 		copy(e.grid[1:r+1], e.grid[0:r])
@@ -273,19 +279,10 @@ func (e *Engine) clearRows() int {
 	}
 
 	if cleared > 0 {
-		if lastZone == "green" {
-			bonus := totalPts / 2
-			e.score += bonus
-			totalPts += bonus
-		}
-		bonus := ""
-		if lastZone == "green" {
-			bonus = " ⚓+50%"
-		}
 		if cleared > 1 {
-			e.comboText = "×" + itoa(cleared) + " COMBO  +" + itoa(totalPts) + bonus
+			e.comboText = itoa(cleared) + " ROWS  +" + itoa(totalPts)
 		} else {
-			e.comboText = "+" + itoa(totalPts) + bonus
+			e.comboText = "+" + itoa(totalPts)
 		}
 		e.comboTime = 2.5
 	}
@@ -344,34 +341,6 @@ func (e *Engine) activateHaz() bool {
 				e.flash = &FlashMsg{
 					Text:  "⚠  EXPLOSION  −50 pts",
 					Color: "#ff8822",
-					T:     2.2,
-				}
-				any = true
-			}
-		}
-	}
-	return any
-}
-
-func (e *Engine) activateReef() bool {
-	vis := map[[2]int]bool{}
-	any := false
-	for r := 0; r < ROWS; r++ {
-		for c := 0; c < COLS; c++ {
-			k := [2]int{r, c}
-			if vis[k] || e.grid[r][c] == nil || e.grid[r][c].Co != "reef" {
-				continue
-			}
-			grp := e.bfs8(r, c, "reef", vis)
-			if len(grp) >= 3 {
-				pts := len(grp) * 100
-				e.score += pts
-				for _, pos := range grp {
-					e.grid[pos[0]][pos[1]] = nil
-				}
-				e.flash = &FlashMsg{
-					Text:  "❄  CHAIN  +" + itoa(pts) + " pts",
-					Color: "#44ddff",
 					T:     2.2,
 				}
 				any = true

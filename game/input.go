@@ -34,11 +34,11 @@ func (e *Engine) registerInput() {
 				case StatePlaying:
 					e.hardDrop()
 				case StateGameOver:
-					e.newGame()
+					e.enterMainMenu()
 				case StateLevelEnd:
 					e.nextLevel()
 				case StateVictory:
-					e.newGame()
+					e.enterMainMenu()
 				}
 			case "Enter":
 				switch e.state {
@@ -47,7 +47,7 @@ func (e *Engine) registerInput() {
 				case StateLevelEnd:
 					e.nextLevel()
 				case StateGameOver, StateVictory:
-					e.newGame()
+					e.enterMainMenu()
 				}
 			case "KeyQ":
 				if e.state == StatePaused {

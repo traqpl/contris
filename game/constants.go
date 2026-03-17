@@ -14,12 +14,14 @@ const (
 	sideX  = COLS*CELL + 10
 	sideW  = 192.0
 
+	shipGap   = 20.0
 	shipViewH = 88.0
 
-	canvasW = COLS*CELL + 10 + sideW         // 298 + 192 = 490
-	canvasH = ROWS*CELL + boardY + shipViewH // 576 + 28 + 88 = 692
+	canvasW = COLS*CELL + 10 + sideW                   // 298 + 192 = 490
+	canvasH = ROWS*CELL + boardY + shipGap + shipViewH // 576 + 28 + 20 + 88 = 712
 
-	RedLimit = 9.0 // seconds in red zone before ship sinks
+	RedLimit             = 9.0 // seconds in red zone before ship sinks
+	ReeferFreezeDuration = 20.0
 
 	MaxLevel = 5
 )
@@ -34,10 +36,10 @@ type levelConfig struct {
 
 var levelConfigs = [MaxLevel]levelConfig{
 	{Duration: 120, DropSpeed: 0.70, GreenZone: 0.28, YellowZone: 0.48},
-	{Duration: 105, DropSpeed: 0.50, GreenZone: 0.22, YellowZone: 0.40},
-	{Duration: 90, DropSpeed: 0.38, GreenZone: 0.16, YellowZone: 0.32},
-	{Duration: 75, DropSpeed: 0.28, GreenZone: 0.12, YellowZone: 0.26},
-	{Duration: 60, DropSpeed: 0.20, GreenZone: 0.08, YellowZone: 0.20},
+	{Duration: 96, DropSpeed: 0.42, GreenZone: 0.18, YellowZone: 0.34},
+	{Duration: 78, DropSpeed: 0.31, GreenZone: 0.13, YellowZone: 0.27},
+	{Duration: 64, DropSpeed: 0.23, GreenZone: 0.10, YellowZone: 0.22},
+	{Duration: 54, DropSpeed: 0.17, GreenZone: 0.07, YellowZone: 0.17},
 }
 
 func levelDuration(level int) float64 {

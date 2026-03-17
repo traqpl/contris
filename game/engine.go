@@ -75,9 +75,10 @@ type Engine struct {
 
 	state GameState
 
-	grid     [ROWS][COLS]*Cell
-	bodies   map[int]*PieceBody // pid → body for shape outline rendering
-	pidCount int
+	grid      [ROWS][COLS]*Cell
+	rowFreeze [ROWS]float64
+	bodies    map[int]*PieceBody // pid → body for shape outline rendering
+	pidCount  int
 
 	cur  Piece
 	next PieceDef
@@ -149,6 +150,7 @@ func (e *Engine) enterMainMenu() {
 
 func (e *Engine) newGame() {
 	e.grid = [ROWS][COLS]*Cell{}
+	e.rowFreeze = [ROWS]float64{}
 	e.bodies = make(map[int]*PieceBody)
 	e.pidCount = 0
 
@@ -175,7 +177,7 @@ func (e *Engine) newGame() {
 	e.comboTime = 0
 	e.state = StatePlaying
 
-	e.next = randDef()
+	e.next = randDef(e.level)
 	e.spawn()
 }
 
@@ -195,6 +197,7 @@ func (e *Engine) nextLevel() {
 
 	// Reset board for fresh level
 	e.grid = [ROWS][COLS]*Cell{}
+	e.rowFreeze = [ROWS]float64{}
 	e.bodies = make(map[int]*PieceBody)
 	e.pidCount = 0
 
@@ -216,7 +219,7 @@ func (e *Engine) nextLevel() {
 	e.comboTime = 0
 
 	e.state = StatePlaying
-	e.next = randDef()
+	e.next = randDef(e.level)
 	e.spawn()
 }
 
@@ -233,7 +236,7 @@ func (e *Engine) spawn() {
 		R:     0,
 		C:     (COLS - w) / 2,
 	}
-	e.next = randDef()
+	e.next = randDef(e.level)
 	if !e.canFit(0, e.cur.C, e.cur.Shape) {
 		e.gameOverReason = GameOverReasonHoldFull
 		e.state = StateGameOver

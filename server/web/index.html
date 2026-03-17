@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&family=VT323&display=swap" rel="stylesheet">
+<link rel="preload" href="menu.mp3" as="audio" type="audio/mpeg" crossorigin>
 <link rel="preload" href="music.ogg" as="audio" type="audio/ogg" crossorigin>
 <link rel="preload" href="music_2.ogg" as="audio" type="audio/ogg" crossorigin>
 <link rel="preload" href="music_3.ogg" as="audio" type="audio/ogg" crossorigin>
@@ -18,7 +19,7 @@
 
   <div class="toolbar">
     <span class="toolbar-title">◈ CARGO SHIFT</span>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div class="toolbar-controls">
       <button id="muteBtn" class="mute-btn" title="Mute / Unmute music">♫</button>
       <label for="themeSelect" class="toolbar-label">THEME</label>
       <select id="themeSelect" class="theme-select">
@@ -29,8 +30,54 @@
     </div>
   </div>
 
+  <section class="menu-screen" id="menuScreen" aria-labelledby="menuTitle">
+    <div class="menu-hero">
+      <p class="menu-kicker">Arcade Cargo Run</p>
+      <h1 id="menuTitle" class="menu-title">Cargo Shift</h1>
+      <p class="menu-subtitle">Keep the ship balanced. Fill the hull. Don&apos;t sink.</p>
+    </div>
+
+    <section class="menu-card menu-card-primary" aria-labelledby="startRunTitle">
+      <p class="menu-eyebrow">Start Run</p>
+      <h2 id="startRunTitle">Load five decks in one voyage</h2>
+      <div class="menu-facts" aria-label="Key rules">
+        <span>Green trim scores best</span>
+        <span>Red trim sinks runs</span>
+        <span>Dangerous goods explode</span>
+      </div>
+      <button id="startShiftBtn" class="start-btn" type="button" disabled>
+        <span class="start-btn-key">Press Space / Enter</span>
+        <span class="start-btn-copy" id="startShiftCopy">Loading bridge systems</span>
+      </button>
+      <p class="menu-hint" id="menuHint">Arrows move cargo. Up rotates. Down drops.</p>
+    </section>
+
+    <div class="menu-strip" aria-hidden="true">
+      <span>5 decks</span>
+      <span>Keep balance</span>
+      <span>Fast run</span>
+    </div>
+
+    <div class="menu-controls-line" aria-label="Controls summary">
+      <span><strong>Arrows</strong> move</span>
+      <span><strong>Up</strong> rotate</span>
+      <span><strong>Down</strong> drop</span>
+      <span><strong>P / Esc</strong> pause</span>
+      <span><strong>M</strong> mute</span>
+      <span><strong>T</strong> theme</span>
+    </div>
+
+    <div class="menu-dock" aria-hidden="true">
+      <div class="dock-hull"></div>
+      <div class="dock-stack dock-stack-a"></div>
+      <div class="dock-stack dock-stack-b"></div>
+      <div class="dock-stack dock-stack-c"></div>
+      <div class="dock-water"></div>
+    </div>
+  </section>
+
   <div class="canvas-wrap">
-    <canvas id="gameCanvas" width="490" height="692"></canvas>
+    <canvas id="gameCanvas" width="490" height="712"></canvas>
     <div id="loading">LOADING...</div>
   </div>
 
@@ -38,16 +85,21 @@
 
 </div>
 
-<audio id="bgMusic" preload="auto"></audio>
+<audio id="bgMusicA" preload="auto"></audio>
+<audio id="bgMusicB" preload="auto"></audio>
 
 <script>
-  const bgMusic = document.getElementById('bgMusic');
+  const bgMusicA = document.getElementById('bgMusicA');
+  const bgMusicB = document.getElementById('bgMusicB');
   const muteBtn = document.getElementById('muteBtn');
-  const menuMusicVolume = 0.18;
+  const menuMusicVolume = 0.32;
   const gameplayMusicVolume = 0.07;
-  bgMusic.volume = menuMusicVolume;
+  window.cargoShiftScene = window.cargoShiftScene || 'menu';
+  const crossfadeSeconds = 2.6;
+  const audioFadeRate = 3.2;
 
-  const playlist = [
+  const menuTrack = { mp3: 'menu.mp3' };
+  const gameplayPlaylist = [
     { ogg: 'music.ogg', mp3: 'music.mp3' },
     { ogg: 'music_2.ogg', mp3: 'music_2.mp3' },
     { ogg: 'music_3.ogg', mp3: 'music_3.mp3' },
@@ -55,8 +107,22 @@
   ];
   const lastTrackStorageKey = 'cargo-shift-last-track';
   let currentTrack = -1;
+  let currentScene = '';
   let musicStarted = false;
   let playbackQueue = [];
+  let muted = false;
+  let activePlayer = bgMusicA;
+  let standbyPlayer = bgMusicB;
+  let activeTrackUrl = '';
+  let activeTrackKind = '';
+  let nextPreparedTrack = null;
+  let fadeState = null;
+
+  [bgMusicA, bgMusicB].forEach((audio) => {
+    audio.volume = 0;
+    audio.loop = false;
+    audio.muted = muted;
+  });
 
   function randomInt(maxExclusive) {
     if (maxExclusive <= 1) {
@@ -71,7 +137,7 @@
   }
 
   function refillPlaybackQueue(lastTrack) {
-    playbackQueue = playlist.map((_, index) => index);
+    playbackQueue = gameplayPlaylist.map((_, index) => index);
     for (let i = playbackQueue.length - 1; i > 0; i -= 1) {
       const j = randomInt(i + 1);
       [playbackQueue[i], playbackQueue[j]] = [playbackQueue[j], playbackQueue[i]];
@@ -84,7 +150,7 @@
   }
 
   function nextTrackIndex() {
-    if (playlist.length === 0) {
+    if (gameplayPlaylist.length === 0) {
       return -1;
     }
     if (playbackQueue.length === 0) {
@@ -97,40 +163,211 @@
     if (!track) {
       return '';
     }
-    const canPlayOgg = typeof bgMusic.canPlayType === 'function'
-      && bgMusic.canPlayType('audio/ogg; codecs=opus') !== '';
+    const canPlayOgg = typeof activePlayer.canPlayType === 'function'
+      && activePlayer.canPlayType('audio/ogg; codecs=opus') !== '';
     if (canPlayOgg && track.ogg) {
       return track.ogg;
     }
     return track.mp3 || track.ogg || '';
   }
 
-  function loadTrack(index) {
-    if (index < 0 || index >= playlist.length) {
-      return;
+  function desiredMusicVolume() {
+    return activeScene() === 'menu' ? menuMusicVolume : gameplayMusicVolume;
+  }
+
+  function applyMuteState() {
+    [bgMusicA, bgMusicB].forEach((audio) => {
+      audio.muted = muted;
+    });
+    muteBtn.textContent = muted ? '♫̸' : '♫';
+    muteBtn.classList.toggle('muted', muted);
+  }
+
+  function swapPlayers() {
+    [activePlayer, standbyPlayer] = [standbyPlayer, activePlayer];
+  }
+
+  function stopPlayer(audio) {
+    audio.pause();
+    audio.currentTime = 0;
+    audio.loop = false;
+    audio.volume = 0;
+  }
+
+  function assignTrack(audio, url, { loop = false } = {}) {
+    if (!url) {
+      return false;
     }
-    const track = playlist[index];
-    const url = preferredTrackUrl(track);
+    if (audio.src !== new URL(url, window.location.href).href) {
+      audio.src = url;
+    }
+    audio.loop = loop;
+    audio.load();
+    return true;
+  }
+
+  function playAudio(audio, targetVolume) {
+    audio.muted = muted;
+    return audio.play().then(() => {
+      musicStarted = true;
+      audio.volume = targetVolume;
+      applyMuteState();
+    }).catch(() => {});
+  }
+
+  function beginCrossfade(url, kind, options = {}) {
     if (!url) {
       return;
     }
-    bgMusic.pause();
-    bgMusic.removeAttribute('src');
-    bgMusic.innerHTML = '';
-    bgMusic.src = url;
-    bgMusic.load();
+    const standbyUrl = standbyPlayer.currentSrc || standbyPlayer.src;
+    const targetUrl = new URL(url, window.location.href).href;
+    const alreadyPrepared = standbyUrl === targetUrl;
+
+    nextPreparedTrack = null;
+    standbyPlayer.pause();
+    standbyPlayer.currentTime = 0;
+    standbyPlayer.loop = Boolean(options.loop);
+    standbyPlayer.volume = 0;
+    if (!alreadyPrepared) {
+      assignTrack(standbyPlayer, url, { loop: Boolean(options.loop) });
+    }
+    fadeState = {
+      from: activePlayer,
+      to: standbyPlayer,
+      targetVolume: desiredMusicVolume(),
+      kind,
+      url,
+      loop: Boolean(options.loop),
+    };
+    playAudio(standbyPlayer, 0);
+  }
+
+  function activeScene() {
+    return window.cargoShiftScene === 'game' ? 'game' : 'menu';
+  }
+
+  function startTrack(url, kind, options = {}) {
+    if (!url) {
+      return;
+    }
+    fadeState = null;
+    nextPreparedTrack = null;
+    stopPlayer(activePlayer);
+    stopPlayer(standbyPlayer);
+    assignTrack(activePlayer, url, { loop: Boolean(options.loop) });
+    activeTrackUrl = url;
+    activeTrackKind = kind;
+    playAudio(activePlayer, desiredMusicVolume());
+  }
+
+  function queueGameplayTrack(index) {
+    if (index < 0 || index >= gameplayPlaylist.length) {
+      nextPreparedTrack = null;
+      return;
+    }
+    const url = preferredTrackUrl(gameplayPlaylist[index]);
+    if (!url) {
+      nextPreparedTrack = null;
+      return;
+    }
+    nextPreparedTrack = { index, url, kind: 'gameplay', loop: false };
+    assignTrack(standbyPlayer, url, { loop: false });
+  }
+
+  function loadGameplayTrack(index) {
+    if (index < 0 || index >= gameplayPlaylist.length) {
+      return;
+    }
+    const url = preferredTrackUrl(gameplayPlaylist[index]);
+    if (!url) {
+      return;
+    }
+    currentTrack = index;
+    activeTrackUrl = url;
+    activeTrackKind = 'gameplay';
     try {
       window.localStorage.setItem(lastTrackStorageKey, String(index));
     } catch (_) {}
+    startTrack(url, 'gameplay');
+    queueGameplayTrack(nextTrackIndex());
   }
 
-  function desiredMusicVolume() {
-    return window.cargoShiftScene === 'menu' ? menuMusicVolume : gameplayMusicVolume;
+  function loadMenuTrack() {
+    const url = preferredTrackUrl(menuTrack);
+    if (!url) {
+      return;
+    }
+    activeTrackUrl = url;
+    activeTrackKind = 'menu';
+    startTrack(url, 'menu', { loop: true });
   }
 
-  function syncMusicVolume() {
-    bgMusic.volume = desiredMusicVolume();
-    window.requestAnimationFrame(syncMusicVolume);
+  function syncSceneTrack() {
+    const scene = activeScene();
+    if (scene === currentScene) {
+      return;
+    }
+
+    currentScene = scene;
+    if (scene === 'menu') {
+      loadMenuTrack();
+    } else {
+      loadGameplayTrack(nextTrackIndex());
+    }
+  }
+
+  function syncCrossfade(dt) {
+    if (!fadeState) {
+      return;
+    }
+    const step = Math.min(1, dt * audioFadeRate);
+    fadeState.from.volume = Math.max(0, fadeState.from.volume - fadeState.targetVolume * step);
+    fadeState.to.volume = Math.min(fadeState.targetVolume, fadeState.to.volume + fadeState.targetVolume * step);
+    if (fadeState.from.volume <= 0.001 && fadeState.to.volume >= fadeState.targetVolume - 0.001) {
+      stopPlayer(fadeState.from);
+      swapPlayers();
+      activeTrackUrl = fadeState.url;
+      activeTrackKind = fadeState.kind;
+      activePlayer.loop = fadeState.loop;
+      fadeState = null;
+      if (activeTrackKind === 'gameplay' && !nextPreparedTrack) {
+        queueGameplayTrack(nextTrackIndex());
+      }
+    }
+  }
+
+  function syncGameplayQueue() {
+    if (activeScene() !== 'game' || fadeState || activeTrackKind !== 'gameplay') {
+      return;
+    }
+    if (!Number.isFinite(activePlayer.duration) || activePlayer.duration <= 0) {
+      return;
+    }
+    const remaining = activePlayer.duration - activePlayer.currentTime;
+    if (remaining > crossfadeSeconds) {
+      return;
+    }
+    if (!nextPreparedTrack) {
+      queueGameplayTrack(nextTrackIndex());
+    }
+    if (nextPreparedTrack) {
+      currentTrack = nextPreparedTrack.index;
+      beginCrossfade(nextPreparedTrack.url, nextPreparedTrack.kind, { loop: false });
+    }
+  }
+
+  let lastAudioTick = performance.now();
+  function syncAudioState(now = performance.now()) {
+    const dt = Math.min(0.25, (now - lastAudioTick) / 1000);
+    lastAudioTick = now;
+    syncSceneTrack();
+    const targetVolume = desiredMusicVolume();
+    if (!fadeState) {
+      activePlayer.volume = targetVolume;
+    }
+    syncCrossfade(dt);
+    syncGameplayQueue();
+    window.requestAnimationFrame(syncAudioState);
   }
 
   try {
@@ -140,27 +377,28 @@
     }
   } catch (_) {}
 
-  currentTrack = nextTrackIndex();
-  loadTrack(currentTrack);
-  syncMusicVolume();
+  syncSceneTrack();
+  syncAudioState();
 
-  bgMusic.addEventListener('ended', () => {
-    currentTrack = nextTrackIndex();
-    loadTrack(currentTrack);
-    bgMusic.play().catch(() => {});
+  [bgMusicA, bgMusicB].forEach((audio) => {
+    audio.addEventListener('ended', () => {
+      if (activeScene() !== 'game' || fadeState || audio !== activePlayer) {
+        return;
+      }
+      const fallbackIndex = nextPreparedTrack ? nextPreparedTrack.index : nextTrackIndex();
+      loadGameplayTrack(fallbackIndex);
+    });
   });
 
   function startMusic() {
-    if (musicStarted) return;
-    bgMusic.play().then(() => {
-      musicStarted = true;
-      muteBtn.textContent = '♫';
-      muteBtn.classList.remove('muted');
-    }).catch(() => {});
+    if (activePlayer.paused) {
+      playAudio(activePlayer, desiredMusicVolume());
+    }
+    if (fadeState && fadeState.to.paused) {
+      playAudio(fadeState.to, 0);
+    }
   }
 
-  // Start as soon as audio data is buffered
-  bgMusic.addEventListener('canplaythrough', startMusic, { once: true });
   startMusic();
 
   function onFirstInteraction() {
@@ -176,10 +414,11 @@
   document.addEventListener('touchstart', onFirstInteraction);
 
   function toggleMute() {
-    bgMusic.muted = !bgMusic.muted;
-    muteBtn.textContent = bgMusic.muted ? '♫̸' : '♫';
-    muteBtn.classList.toggle('muted', bgMusic.muted);
+    muted = !muted;
+    applyMuteState();
   }
+
+  applyMuteState();
 
   muteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -196,6 +435,10 @@
 
 <script>
   const monitor = document.getElementById('monitor');
+  const menuScreen = document.getElementById('menuScreen');
+  const startShiftBtn = document.getElementById('startShiftBtn');
+  const startShiftCopy = document.getElementById('startShiftCopy');
+  const menuHint = document.getElementById('menuHint');
   const themeSelect = document.getElementById('themeSelect');
   const themes = ['theme-amber', 'theme-green', 'theme-cyan'];
 
@@ -229,16 +472,42 @@
   if (hdrSupported) {
     monitor.classList.add('hdr-mode');
   }
+
+  function dispatchGameKey(code) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+  }
+
+  startShiftBtn.addEventListener('click', () => {
+    if (startShiftBtn.disabled) {
+      return;
+    }
+    dispatchGameKey('Space');
+  });
+
+  function syncViewState() {
+    const inMenu = window.cargoShiftScene !== 'game';
+    monitor.classList.toggle('in-menu', inMenu);
+    menuScreen.setAttribute('aria-hidden', inMenu ? 'false' : 'true');
+    window.requestAnimationFrame(syncViewState);
+  }
+
+  syncViewState();
 </script>
 <script src="wasm_exec.js"></script>
 <script>
   const go = new Go();
   WebAssembly.instantiateStreaming(fetch('game.wasm'), go.importObject)
     .then(result => {
+      startShiftBtn.disabled = false;
+      startShiftCopy.textContent = 'Start shift';
+      menuHint.textContent = 'Keyboard-first by design. Press Space or Enter, or use the button if you prefer.';
       document.getElementById('loading').style.display = 'none';
       go.run(result.instance);
     })
     .catch(err => {
+      startShiftCopy.textContent = 'Load failed';
+      menuHint.textContent = 'The game runtime did not start. Open the console for details.';
       document.getElementById('loading').textContent = 'ERROR: ' + err.message;
     });
 </script>

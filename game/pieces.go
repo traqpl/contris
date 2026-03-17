@@ -81,7 +81,7 @@ func init() {
 	add("tu4", "orange", "4TU", 6)
 	add("tu4", "white", "4TU", 2)
 
-	pool = append(pool, PieceDef{Shape: []Vec2{{0, 0}}, Co: "reef", Label: "REEFER", W: 2})
+	add("tu2", "reef", "REEFER 2TU", 1)
 	pool = append(pool, PieceDef{Shape: []Vec2{{0, 0}}, Co: "haz", Label: "HAZMAT", W: 2})
 
 	for _, key := range []string{"O", "L", "J", "T", "S", "Z"} {
@@ -90,14 +90,28 @@ func init() {
 	}
 }
 
-func randDef() PieceDef {
+func pieceWeightForLevel(d PieceDef, level int) int {
+	if d.Co != "reef" {
+		return d.W
+	}
+	switch {
+	case level <= 1:
+		return 1
+	case level <= 3:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func randDef(level int) PieceDef {
 	total := 0
 	for _, d := range pool {
-		total += d.W
+		total += pieceWeightForLevel(d, level)
 	}
 	n := rand.Intn(total)
 	for _, d := range pool {
-		n -= d.W
+		n -= pieceWeightForLevel(d, level)
 		if n < 0 {
 			return newDef(d)
 		}

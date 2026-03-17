@@ -142,7 +142,7 @@ func (e *Engine) Render() {
 	e.renderHeader()
 	e.renderBoard()
 	e.renderSidebar()
-	e.renderShip(0, boardY+ROWS*CELL, canvasW, shipViewH, e.heelAnim, true)
+	e.renderShip(0, boardY+ROWS*CELL+shipGap, canvasW, shipViewH, e.heelAnim, true)
 	if e.state == StateGameOver {
 		e.renderGameOver()
 	}
@@ -254,7 +254,7 @@ func (e *Engine) renderMainMenu() {
 
 	e.ctx.Set("fillStyle", "#314656")
 	e.text("Press SPACE or ENTER to begin.", canvasW/2, 348, 13, "center")
-	e.renderShip(0, boardY+ROWS*CELL, canvasW, shipViewH, 0, false)
+	e.renderShip(0, boardY+ROWS*CELL+shipGap, canvasW, shipViewH, 0, false)
 }
 
 func (e *Engine) renderHeader() {
@@ -296,6 +296,25 @@ func (e *Engine) renderBoard() {
 
 	heel := predH
 
+	// Frozen-row overlay
+	for r := 0; r < ROWS; r++ {
+		frozenFor := e.rowFrozenTime(r)
+		if frozenFor <= 0 {
+			continue
+		}
+		rowY := boardY + float64(r)*CELL
+		e.ctx.Set("fillStyle", "rgba(86, 188, 220, 0.14)")
+		e.ctx.Call("fillRect", boardX, rowY, float64(COLS)*CELL, CELL)
+		e.ctx.Set("strokeStyle", "rgba(120, 230, 255, 0.42)")
+		e.ctx.Set("lineWidth", 1)
+		e.ctx.Call("beginPath")
+		e.ctx.Call("moveTo", boardX, rowY+1)
+		e.ctx.Call("lineTo", boardX+float64(COLS)*CELL, rowY+1)
+		e.ctx.Call("moveTo", boardX, rowY+CELL-1)
+		e.ctx.Call("lineTo", boardX+float64(COLS)*CELL, rowY+CELL-1)
+		e.ctx.Call("stroke")
+	}
+
 	// Full-row tints
 	for r := 0; r < ROWS; r++ {
 		full := true
@@ -310,10 +329,15 @@ func (e *Engine) renderBoard() {
 		}
 		res := e.evalRow(r, heel)
 		zone := "red"
+		frozen := e.rowFrozenTime(r) > 0
 		if res != nil {
 			zone = res.zone
 		}
-		e.ctx.Set("fillStyle", zoneTint[zone])
+		if frozen {
+			e.ctx.Set("fillStyle", "rgba(70, 150, 190, 0.18)")
+		} else {
+			e.ctx.Set("fillStyle", zoneTint[zone])
+		}
 		e.ctx.Call("fillRect", boardX, boardY+float64(r)*CELL, float64(COLS)*CELL, CELL)
 	}
 
@@ -410,7 +434,12 @@ func (e *Engine) renderBoard() {
 		res := e.evalRow(r, heel)
 		x := boardX + float64(COLS)*CELL - 2
 		y := boardY + float64(r)*CELL + CELL - 4
-		if res != nil {
+		frozenFor := e.rowFrozenTime(r)
+		if frozenFor > 0 {
+			e.ctx.Set("fillStyle", "#6fd8ff")
+			e.ctx.Set("textAlign", "right")
+			e.ctx.Call("fillText", fmt.Sprintf("❄%.0f", math.Ceil(frozenFor)), x, y)
+		} else if res != nil {
 			e.ctx.Set("fillStyle", zoneSide[res.zone])
 			e.ctx.Set("textAlign", "right")
 			e.ctx.Call("fillText", fmt.Sprintf("▶%d", res.pts), x, y)
@@ -495,8 +524,8 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 			e.ctx.Set("strokeStyle", "#ff8800")
 			e.ctx.Set("fillStyle", "#ffcc00")
 		} else {
-			e.ctx.Set("strokeStyle", "#44ddff")
-			e.ctx.Set("fillStyle", "#aaeeff")
+			e.ctx.Set("strokeStyle", "#72ecff")
+			e.ctx.Set("fillStyle", "#d9fbff")
 		}
 		e.ctx.Set("lineWidth", 1.5)
 		e.ctx.Call("strokeRect", x+2, y+2, sz-4, sz-4)
@@ -504,10 +533,10 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 		if co == "reef" {
 			icon = "❄"
 		}
-		e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", sz*0.48, uiFontBody))
+		e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", sz*0.56, uiFontBody))
 		e.ctx.Set("textAlign", "center")
 		e.ctx.Set("textBaseline", "middle")
-		e.ctx.Call("fillText", icon, x+sz/2, y+sz/2+1)
+		e.ctx.Call("fillText", icon, x+sz/2, y+sz/2)
 
 	default:
 		// ── Kontener właściwy ─────────────────────────────────────────────
@@ -768,22 +797,31 @@ func (e *Engine) renderSidebar() {
 
 	sepLine(8)
 
-	// ── Shortcuts — przypięte do dołu ────────────────────────────────────
+	// ── Rules + shortcuts — przypięte do dołu ───────────────────────────
+	rules := []string{
+		"GREEN  clear row = 200",
+		"YELLOW clear row = 100",
+		"RED    no row clear",
+		"DG pair explodes = -50",
+		"REEFER 2TU freezes row = 20s",
+	}
 	shortcuts := []struct{ key, action string }{
-		{"ARROWS", "move left / right"},
-		{"UP", "rotate cargo"},
-		{"DOWN", "soft drop"},
+		{"ARROWS", "move"},
+		{"UP", "rotate"},
+		{"DOWN", "drop"},
 		{"SPACE", "hard drop"},
-		{"P / ESC", "pause / resume"},
-		{"Q", "menu from pause"},
-		{"M", "mute music"},
-		{"T", "change theme"},
+		{"P / ESC", "pause"},
+		{"Q", "menu"},
+		{"M / T", "mute / theme"},
 	}
 
+	ruleLineH := 16.0
+	rulesPanelH := 28.0 + float64(len(rules))*ruleLineH
 	keyH := 18.0
-	panelH := 30.0 + float64(len(shortcuts))*keyH
+	shortcutsPanelH := 30.0 + float64(len(shortcuts))*keyH
+	blockGap := 8.0
+	blockH := rulesPanelH + blockGap + shortcutsPanelH
 	sideBottom := boardY + float64(ROWS)*CELL
-	blockH := panelH
 	ry := sideBottom - blockH
 	if ry < y {
 		ry = y
@@ -796,10 +834,37 @@ func (e *Engine) renderSidebar() {
 	actionX := panelX + keyColW + 14
 
 	e.ctx.Set("fillStyle", "rgba(8,14,20,0.82)")
-	e.ctx.Call("fillRect", panelX, y, panelW, panelH)
+	e.ctx.Call("fillRect", panelX, y, panelW, rulesPanelH)
 	e.ctx.Set("strokeStyle", "#22364a")
 	e.ctx.Set("lineWidth", 1)
-	e.ctx.Call("strokeRect", panelX+0.5, y+0.5, panelW-1, panelH-1)
+	e.ctx.Call("strokeRect", panelX+0.5, y+0.5, panelW-1, rulesPanelH-1)
+
+	e.ctx.Set("fillStyle", dim)
+	e.text("RULES", x+sideW/2, y+18, 14, "center")
+	y += 30
+
+	for _, line := range rules {
+		parts := strings.SplitN(line, "=", 2)
+		left := strings.TrimSpace(parts[0])
+		right := ""
+		if len(parts) > 1 {
+			right = strings.TrimSpace(parts[1])
+		}
+		e.crispGlow(left, panelX+8, y+12, 11, "left", color)
+		if right != "" {
+			e.ctx.Set("fillStyle", "#607888")
+			e.text(right, panelX+panelW-8, y+12, 11, "right")
+		}
+		y += ruleLineH
+	}
+
+	y += blockGap
+
+	e.ctx.Set("fillStyle", "rgba(8,14,20,0.82)")
+	e.ctx.Call("fillRect", panelX, y, panelW, shortcutsPanelH)
+	e.ctx.Set("strokeStyle", "#22364a")
+	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("strokeRect", panelX+0.5, y+0.5, panelW-1, shortcutsPanelH-1)
 
 	e.ctx.Set("fillStyle", dim)
 	e.text("SHORTCUTS", x+sideW/2, y+18, 14, "center")
@@ -807,7 +872,7 @@ func (e *Engine) renderSidebar() {
 	e.ctx.Set("lineWidth", 1)
 	e.ctx.Call("beginPath")
 	e.ctx.Call("moveTo", panelX+keyColW, y+24)
-	e.ctx.Call("lineTo", panelX+keyColW, y+panelH-10)
+	e.ctx.Call("lineTo", panelX+keyColW, y+shortcutsPanelH-10)
 	e.ctx.Call("stroke")
 	y += 32
 
@@ -972,9 +1037,13 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	}
 
 	// ── Obrys kadłuba — tylko linie, bez wypełnienia ───────────────────────
+	hullGlow := e.glowColor()
+	e.ctx.Set("shadowBlur", 10)
+	e.ctx.Set("shadowColor", hullGlow)
+
 	// Boczna ściana powyżej wody (pokład)
-	e.ctx.Set("strokeStyle", "#3a6090")
-	e.ctx.Set("lineWidth", 1.5)
+	e.ctx.Set("strokeStyle", "#68a8da")
+	e.ctx.Set("lineWidth", 1.8)
 	e.ctx.Call("beginPath")
 	e.ctx.Call("moveTo", -sa+sternT, 0)
 	e.ctx.Call("lineTo", -sa, -deckH)
@@ -983,8 +1052,8 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	e.ctx.Call("stroke")
 
 	// Obrys kadłuba poniżej wody — czerwona linia
-	e.ctx.Set("strokeStyle", "#c03010")
-	e.ctx.Set("lineWidth", 1.5)
+	e.ctx.Set("strokeStyle", "#ff3b14")
+	e.ctx.Set("lineWidth", 2.1)
 	e.ctx.Call("beginPath")
 	e.ctx.Call("moveTo", -sa+sternT, 0)
 	e.ctx.Call("lineTo", -sa, hullD)
@@ -994,12 +1063,14 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	e.ctx.Call("stroke")
 
 	// Linia wodna (niebieska)
-	e.ctx.Set("strokeStyle", "#4a8aaa")
-	e.ctx.Set("lineWidth", 1)
+	e.ctx.Set("strokeStyle", "#9ce8ff")
+	e.ctx.Set("lineWidth", 1.3)
 	e.ctx.Call("beginPath")
 	e.ctx.Call("moveTo", -sa+sternT, 0)
 	e.ctx.Call("lineTo", sa-bowS*0.25, 0)
 	e.ctx.Call("stroke")
+	e.ctx.Set("shadowBlur", 0)
+	e.ctx.Set("shadowColor", "transparent")
 
 	// Pionowe wręgi kadłuba (szkielet)
 	e.ctx.Set("strokeStyle", "rgba(58,96,144,0.35)")
@@ -1016,27 +1087,62 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	bw := w * 0.085
 	bx := sa*0.30 - bw/2
 	bh := deckH * 1.85
-	e.ctx.Set("fillStyle", "#c8d0d4")
+	bridgeY := -deckH - bh
+	e.ctx.Set("fillStyle", "#b8c3ca")
 	e.ctx.Call("fillRect", bx, -deckH-bh, bw, bh)
-	e.ctx.Set("fillStyle", "#1a4878")
-	e.ctx.Call("fillRect", bx+1, -deckH-bh+1, bw-2, bh*0.32)
-	e.ctx.Set("strokeStyle", "#8898a8")
+	e.ctx.Set("fillStyle", "rgba(255,255,255,0.14)")
+	e.ctx.Call("fillRect", bx+1, bridgeY+1, bw-2, bh*0.16)
+	e.ctx.Set("fillStyle", "#284f76")
+	e.ctx.Call("fillRect", bx+1.5, bridgeY+2, bw-3, bh*0.30)
+	e.ctx.Set("strokeStyle", "#8ea2b4")
 	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("strokeRect", bx+0.5, bridgeY+0.5, bw-1, bh-1)
+	e.ctx.Set("strokeStyle", "rgba(36,58,78,0.65)")
 	e.ctx.Call("beginPath")
-	e.ctx.Call("moveTo", bx+bw/2, -deckH-bh)
-	e.ctx.Call("lineTo", bx+bw/2, -deckH-bh-16)
+	e.ctx.Call("moveTo", bx+2, bridgeY+bh*0.46)
+	e.ctx.Call("lineTo", bx+bw-2, bridgeY+bh*0.46)
+	e.ctx.Call("moveTo", bx+bw*0.5, bridgeY+bh*0.46)
+	e.ctx.Call("lineTo", bx+bw*0.5, bridgeY+bh-2)
 	e.ctx.Call("stroke")
+
+	e.ctx.Set("fillStyle", "#aeb8bf")
+	e.ctx.Call("fillRect", bx+bw*0.18, bridgeY-4, bw*0.64, 4)
+	e.ctx.Set("strokeStyle", "#9fb8c8")
+	e.ctx.Call("beginPath")
+	e.ctx.Call("moveTo", bx+bw/2, bridgeY-4)
+	e.ctx.Call("lineTo", bx+bw/2, bridgeY-16)
+	e.ctx.Call("stroke")
+	e.ctx.Set("fillStyle", "#9ce8ff")
+	e.ctx.Call("fillRect", bx+bw/2-1, bridgeY-18, 2, 3)
+	e.ctx.Set("fillStyle", "#d8edf8")
+	for i := 0; i < 3; i++ {
+		wx := bx + bw*0.14 + float64(i)*bw*0.24
+		e.ctx.Call("fillRect", wx, bridgeY+bh*0.10, bw*0.14, bh*0.12)
+	}
 
 	// ── Nadbudówka 2: komin ───────────────────────────────────────────────
 	fw := w * 0.06
 	fx := -sa*0.50 - fw/2
 	fh := deckH * 1.45
-	e.ctx.Set("fillStyle", "#c8a800")
-	e.ctx.Call("fillRect", fx, -deckH-fh, fw, fh)
+	fy := -deckH - fh
+	e.ctx.Set("fillStyle", "#c6a21d")
+	e.ctx.Call("fillRect", fx, fy, fw, fh)
+	e.ctx.Set("fillStyle", "rgba(255,255,255,0.12)")
+	e.ctx.Call("fillRect", fx+1, fy+1, fw-2, fh*0.16)
+	e.ctx.Set("strokeStyle", "#6a5a20")
+	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("strokeRect", fx+0.5, fy+0.5, fw-1, fh-1)
+	e.ctx.Set("strokeStyle", "rgba(78,56,18,0.55)")
+	e.ctx.Call("beginPath")
+	e.ctx.Call("moveTo", fx+fw*0.5, fy+2)
+	e.ctx.Call("lineTo", fx+fw*0.5, fy+fh-2)
+	e.ctx.Call("stroke")
 	e.ctx.Set("fillStyle", "#1a1a1a")
-	e.ctx.Call("fillRect", fx+fw*0.25, -deckH-fh-10, fw*0.50, 12)
+	e.ctx.Call("fillRect", fx+fw*0.22, fy-10, fw*0.56, 12)
 	e.ctx.Set("fillStyle", "#c03010")
-	e.ctx.Call("fillRect", fx+fw*0.25, -deckH-fh-4, fw*0.50, 3)
+	e.ctx.Call("fillRect", fx+fw*0.22, fy-4, fw*0.56, 3)
+	e.ctx.Set("fillStyle", "#f4d46f")
+	e.ctx.Call("fillRect", fx+fw*0.18, fy+fh*0.24, fw*0.64, 2)
 
 	e.ctx.Call("restore")
 
@@ -1194,7 +1300,7 @@ func (e *Engine) renderVictory() {
 	y += 36
 
 	e.ctx.Set("fillStyle", color)
-	e.text("SPACE = new game", cx, y, 16, "center")
+	e.text("SPACE / ENTER = main menu", cx, y, 16, "center")
 	y += 20
 	e.ctx.Set("fillStyle", "#4a4040")
 	e.text("ESC = main menu", cx, y, 14, "center")
@@ -1241,7 +1347,7 @@ func (e *Engine) renderGameOver() {
 	e.ctx.Set("fillStyle", "#3a5060")
 	e.text(fmt.Sprintf("score: %d", e.score), boardX+float64(COLS)*CELL/2, cy+14, 16, "center")
 	e.ctx.Set("fillStyle", "#2a4050")
-	e.text("SPACE / ENTER = new game", boardX+float64(COLS)*CELL/2, cy+30, 14, "center")
+	e.text("SPACE / ENTER = main menu", boardX+float64(COLS)*CELL/2, cy+30, 14, "center")
 	e.ctx.Set("fillStyle", "#4a4040")
 	e.text("ESC = main menu", boardX+float64(COLS)*CELL/2, cy+46, 14, "center")
 }
