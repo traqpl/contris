@@ -12,6 +12,7 @@ func main() {
 	canvas := js.Global().Get("document").Call("getElementById", "gameCanvas")
 	engine = NewEngine(canvas)
 	engine.registerInput()
+	js.Global().Set("cargoShiftScene", engine.audioScene())
 
 	var lastTime float64
 	var loop js.Func
@@ -28,6 +29,7 @@ func main() {
 
 		engine.Update(dt)
 		engine.Render()
+		js.Global().Set("cargoShiftScene", engine.audioScene())
 
 		js.Global().Call("requestAnimationFrame", loop)
 		return nil

@@ -5,10 +5,14 @@ package main
 import (
 	"fmt"
 	"math"
+	"strings"
 	"syscall/js"
 )
 
-const uiFontRegular = `"IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif`
+const (
+	uiFontBody    = `"IBM Plex Sans", Arial, sans-serif`
+	uiFontDisplay = `"IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif`
+)
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,7 +76,7 @@ func (e *Engine) noGlow() {
 }
 
 func (e *Engine) text(str string, x, y, size float64, align string) {
-	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "500", size, uiFontRegular))
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "500", size, uiFontBody))
 	e.ctx.Set("textAlign", align)
 	e.ctx.Set("textBaseline", "alphabetic")
 	e.ctx.Call("fillText", str, x, y)
@@ -83,7 +87,7 @@ func (e *Engine) text(str string, x, y, size float64, align string) {
 func (e *Engine) crispGlow(str string, x, y, size float64, align, col string) {
 	e.ctx.Set("textAlign", align)
 	e.ctx.Set("textBaseline", "alphabetic")
-	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", size, uiFontRegular))
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", size, uiFontDisplay))
 	// halo — mały blur, kolor CRT
 	e.ctx.Set("shadowBlur", 6)
 	e.ctx.Set("shadowColor", e.glowColor())
@@ -93,6 +97,33 @@ func (e *Engine) crispGlow(str string, x, y, size float64, align, col string) {
 	e.ctx.Set("shadowBlur", 0)
 	e.ctx.Set("shadowColor", "transparent")
 	e.ctx.Call("fillText", str, x, y)
+}
+
+func (e *Engine) wrappedText(str string, x, y, maxWidth, size, lineHeight float64, align string, color string) float64 {
+	words := strings.Fields(str)
+	if len(words) == 0 {
+		return y
+	}
+
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "500", size, uiFontBody))
+	e.ctx.Set("textAlign", align)
+	e.ctx.Set("textBaseline", "alphabetic")
+	e.ctx.Set("fillStyle", color)
+
+	line := words[0]
+	for _, word := range words[1:] {
+		candidate := line + " " + word
+		width := e.ctx.Call("measureText", candidate).Get("width").Float()
+		if width <= maxWidth {
+			line = candidate
+			continue
+		}
+		e.ctx.Call("fillText", line, x, y)
+		y += lineHeight
+		line = word
+	}
+	e.ctx.Call("fillText", line, x, y)
+	return y + lineHeight
 }
 
 func (e *Engine) clear() {
@@ -111,7 +142,7 @@ func (e *Engine) Render() {
 	e.renderHeader()
 	e.renderBoard()
 	e.renderSidebar()
-	e.renderShip(0, boardY+ROWS*CELL, canvasW, shipViewH, e.heelAnim)
+	e.renderShip(0, boardY+ROWS*CELL, canvasW, shipViewH, e.heelAnim, true)
 	if e.state == StateGameOver {
 		e.renderGameOver()
 	}
@@ -131,86 +162,99 @@ func (e *Engine) renderMainMenu() {
 	dim := "#5a7888"
 	soft := "#3a5060"
 	accent := "#8aaa7a"
+	panelStroke := "#22364a"
 
-	e.crispGlow("CARGO SHIFT", canvasW/2, 26, 26, "center", color)
+	e.crispGlow("CARGO SHIFT", canvasW/2, 30, 28, "center", color)
 	e.ctx.Set("fillStyle", soft)
 	e.noGlow()
-	e.text("stack smart · keep trim · fill all five decks", canvasW/2, 48, 14, "center")
+	e.text("stack smart · keep trim · load all five decks", canvasW/2, 54, 14, "center")
 
-	panelX := boardX + 10.0
-	panelY := boardY + 22.0
-	panelW := float64(COLS)*CELL - 20.0
-	panelH := 272.0
+	panelX := 26.0
+	panelY := 76.0
+	panelW := canvasW - 52.0
+	panelH := 246.0
+	gap := 18.0
+	colW := (panelW - gap - 32.0) / 2
+	leftX := panelX + 16.0
+	rightX := leftX + colW + gap
 
 	e.ctx.Set("fillStyle", "rgba(0,0,0,0.72)")
 	e.ctx.Call("fillRect", panelX, panelY, panelW, panelH)
-	e.ctx.Set("strokeStyle", "#2e404e")
+	e.ctx.Set("strokeStyle", panelStroke)
 	e.ctx.Set("lineWidth", 2)
 	e.ctx.Call("strokeRect", panelX+1, panelY+1, panelW-2, panelH-2)
-
-	cx := boardX + float64(COLS)*CELL/2
-	y := panelY + 34.0
-	e.crispGlow("MAIN MENU", cx, y, 20, "center", color)
-	y += 30
-	e.ctx.Set("fillStyle", dim)
-	e.text("Balance mixed cargo before the ship heels over.", cx, y, 14, "center")
-	y += 18
-	e.text("Each cleared level seals one more deck in the hull.", cx, y, 14, "center")
-	y += 34
-
-	e.crispGlow("SPACE / ENTER", cx, y, 20, "center", accent)
-	y += 22
-	e.ctx.Set("fillStyle", dim)
-	e.text("start a new shift", cx, y, 15, "center")
-	y += 30
-
-	e.ctx.Set("fillStyle", soft)
-	e.text("ARROWS move · rotate · drop", cx, y, 14, "center")
-	y += 18
-	e.text("P / ESC pause · T change theme · M mute", cx, y, 14, "center")
-	y += 18
-	e.text("Finish 5 levels to load the full ship.", cx, y, 14, "center")
-
-	sx := sideX
-	sy := boardY + 18.0
-	e.ctx.Set("fillStyle", dim)
-	e.text("SHIFT BRIEF", sx+sideW/2, sy+14, 17, "center")
-	sy += 26
-
-	brief := []string{
-		"GREEN trim gives the best row payout.",
-		"YELLOW trim is risky but still scores.",
-		"RED trim blocks row clears and sinks runs.",
-		"Hazmat pairs explode.",
-		"Reefer chains reward fast cleanup.",
-	}
-	for _, line := range brief {
-		e.ctx.Set("fillStyle", soft)
-		e.text(line, sx+6, sy+14, 14, "left")
-		sy += 20
-	}
-
-	sy += 8
-	e.ctx.Set("strokeStyle", "#2e404e")
+	dividerX := leftX + colW + gap/2
+	e.ctx.Set("strokeStyle", "rgba(58,80,96,0.7)")
 	e.ctx.Set("lineWidth", 1)
 	e.ctx.Call("beginPath")
-	e.ctx.Call("moveTo", sx+4, sy)
-	e.ctx.Call("lineTo", sx+sideW-4, sy)
+	e.ctx.Call("moveTo", dividerX, panelY+14)
+	e.ctx.Call("lineTo", dividerX, panelY+panelH-14)
 	e.ctx.Call("stroke")
-	sy += 18
-	e.ctx.Set("fillStyle", accent)
-	e.text("GOAL", sx+sideW/2, sy+14, 16, "center")
-	sy += 22
-	e.ctx.Set("fillStyle", soft)
-	e.text("Seal one deck per completed level.", sx+6, sy+14, 14, "left")
-	sy += 20
-	e.text("Five levels = fully loaded ship.", sx+6, sy+14, 14, "left")
 
-	e.renderShip(0, boardY+ROWS*CELL, canvasW, shipViewH, 0)
-	if hdrMode := e.hdrMode(); hdrMode {
-		e.ctx.Set("fillStyle", "#ffe08a")
-		e.text("HDR AUTO", canvasW-6, canvasH-6, 10, "right")
+	leftY := panelY + 28.0
+	e.crispGlow("START SHIFT", leftX, leftY, 18, "left", color)
+	leftY += 28
+	leftY = e.wrappedText("Keep the ship level while stacking mixed cargo.", leftX, leftY, colW, 14, 18, "left", dim)
+	leftY = e.wrappedText("Each finished level seals one deck in the hull.", leftX, leftY, colW, 14, 18, "left", dim)
+	leftY += 8
+
+	e.ctx.Set("fillStyle", "rgba(18,30,42,0.85)")
+	e.ctx.Call("fillRect", leftX, leftY, colW, 56)
+	e.ctx.Set("strokeStyle", "rgba(108,144,170,0.45)")
+	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("strokeRect", leftX+0.5, leftY+0.5, colW-1, 55)
+	e.crispGlow("SPACE / ENTER", leftX+colW/2, leftY+25, 18, "center", accent)
+	e.ctx.Set("fillStyle", dim)
+	e.text("start a new run", leftX+colW/2, leftY+45, 13, "center")
+	leftY += 78
+
+	e.ctx.Set("fillStyle", dim)
+	e.text("CONTROLS", leftX, leftY, 15, "left")
+	leftY += 22
+	controls := []string{
+		"← / →  move cargo",
+		"↑  rotate   ↓  soft drop",
+		"P / ESC  pause / resume",
+		"Q  menu   M  mute   T  theme",
 	}
+	for _, line := range controls {
+		leftY = e.wrappedText(line, leftX, leftY, colW, 13, 17, "left", soft)
+	}
+
+	rightY := panelY + 28.0
+	e.ctx.Set("fillStyle", dim)
+	e.text("SHIFT BRIEF", rightX, rightY, 15, "left")
+	rightY += 22
+	brief := []string{
+		"Green trim pays best.",
+		"Yellow trim is risky but still scores.",
+		"Red trim blocks row clears and sinks runs.",
+		"Hazmat pairs explode. Reefers chain for bonus points.",
+	}
+	for _, line := range brief {
+		rightY = e.wrappedText(line, rightX, rightY, colW, 13, 17, "left", soft)
+		if rightY < panelY+panelH-74 {
+			rightY += 2
+		}
+	}
+
+	rightY = panelY + panelH - 74
+	e.ctx.Set("strokeStyle", "rgba(58,80,96,0.7)")
+	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("beginPath")
+	e.ctx.Call("moveTo", rightX, rightY)
+	e.ctx.Call("lineTo", rightX+colW, rightY)
+	e.ctx.Call("stroke")
+	rightY += 20
+	e.ctx.Set("fillStyle", accent)
+	e.text("GOAL", rightX, rightY, 15, "left")
+	rightY += 22
+	rightY = e.wrappedText("Complete five levels to fully load the ship.", rightX, rightY, colW, 13, 17, "left", soft)
+	e.wrappedText("One level completed = one sealed deck.", rightX, rightY, colW, 13, 17, "left", soft)
+
+	e.ctx.Set("fillStyle", "#314656")
+	e.text("Press SPACE or ENTER to begin.", canvasW/2, 348, 13, "center")
+	e.renderShip(0, boardY+ROWS*CELL, canvasW, shipViewH, 0, false)
 }
 
 func (e *Engine) renderHeader() {
@@ -351,7 +395,7 @@ func (e *Engine) renderBoard() {
 	}
 
 	// Row score labels
-	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", 9.0, uiFontRegular))
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", 9.0, uiFontBody))
 	for r := 0; r < ROWS; r++ {
 		full := true
 		for _, cell := range e.grid[r] {
@@ -460,7 +504,7 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 		if co == "reef" {
 			icon = "❄"
 		}
-		e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", sz*0.48, uiFontRegular))
+		e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", sz*0.48, uiFontBody))
 		e.ctx.Set("textAlign", "center")
 		e.ctx.Set("textBaseline", "middle")
 		e.ctx.Call("fillText", icon, x+sz/2, y+sz/2+1)
@@ -670,7 +714,7 @@ func (e *Engine) renderSidebar() {
 	statRow("LINES", itoa(e.lines), color)
 	statRow("LEVEL", itoa(e.level), color)
 
-	remaining := levelDuration(e.level) - e.levelTimer
+	remaining := math.Max(0, levelDuration(e.level)-e.levelTimer)
 	mins := int(remaining) / 60
 	secs := int(remaining) % 60
 	timerStr := itoa(mins) + ":"
@@ -722,23 +766,55 @@ func (e *Engine) renderSidebar() {
 	e.renderDangerBar(x, y, sideW, 9)
 	y += 14
 
-	sepLine(10)
+	sepLine(8)
 
-	// ── Keys — przypięte do dołu ─────────────────────────────────────────
-	keys := []string{"← →  move", "↑  rotate", "↓  speed up", "SPACE  drop", "P / ESC  pause"}
+	// ── Shortcuts — przypięte do dołu ────────────────────────────────────
+	shortcuts := []struct{ key, action string }{
+		{"ARROWS", "move left / right"},
+		{"UP", "rotate cargo"},
+		{"DOWN", "soft drop"},
+		{"SPACE", "hard drop"},
+		{"P / ESC", "pause / resume"},
+		{"Q", "menu from pause"},
+		{"M", "mute music"},
+		{"T", "change theme"},
+	}
 
 	keyH := 18.0
+	panelH := 30.0 + float64(len(shortcuts))*keyH
 	sideBottom := boardY + float64(ROWS)*CELL
-	blockH := float64(len(keys)) * keyH
+	blockH := panelH
 	ry := sideBottom - blockH
 	if ry < y {
 		ry = y
 	}
 	y = ry
 
-	e.ctx.Set("fillStyle", "#607888")
-	for _, k := range keys {
-		e.text(k, x+6, y+14, 16, "left")
+	panelX := x + 2
+	panelW := sideW - 4
+	keyColW := 78.0
+	actionX := panelX + keyColW + 14
+
+	e.ctx.Set("fillStyle", "rgba(8,14,20,0.82)")
+	e.ctx.Call("fillRect", panelX, y, panelW, panelH)
+	e.ctx.Set("strokeStyle", "#22364a")
+	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("strokeRect", panelX+0.5, y+0.5, panelW-1, panelH-1)
+
+	e.ctx.Set("fillStyle", dim)
+	e.text("SHORTCUTS", x+sideW/2, y+18, 14, "center")
+	e.ctx.Set("strokeStyle", "rgba(58,80,96,0.6)")
+	e.ctx.Set("lineWidth", 1)
+	e.ctx.Call("beginPath")
+	e.ctx.Call("moveTo", panelX+keyColW, y+24)
+	e.ctx.Call("lineTo", panelX+keyColW, y+panelH-10)
+	e.ctx.Call("stroke")
+	y += 32
+
+	for _, item := range shortcuts {
+		e.crispGlow(item.key, panelX+10, y+13, 12, "left", color)
+		e.ctx.Set("fillStyle", "#607888")
+		e.text(item.action, actionX, y+13, 12, "left")
 		y += keyH
 	}
 }
@@ -810,7 +886,7 @@ func (e *Engine) renderDangerBar(x, y, w, h float64) {
 	e.ctx.Call("restore")
 
 	e.ctx.Set("fillStyle", "rgba(255,255,255,0.55)")
-	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "500", 8.0, uiFontRegular))
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "500", 8.0, uiFontBody))
 	e.ctx.Set("textAlign", "center")
 	e.ctx.Set("textBaseline", "middle")
 	e.ctx.Call("fillText",
@@ -821,7 +897,7 @@ func (e *Engine) renderDangerBar(x, y, w, h float64) {
 
 // ── ship side view ────────────────────────────────────────────────────────────
 
-func (e *Engine) renderShip(x, y, w, h, heel float64) {
+func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	e.ctx.Call("save")
 	e.ctx.Call("beginPath")
 	e.ctx.Call("rect", x, y, w, h)
@@ -900,8 +976,10 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 	e.ctx.Set("strokeStyle", "#3a6090")
 	e.ctx.Set("lineWidth", 1.5)
 	e.ctx.Call("beginPath")
-	e.ctx.Call("moveTo", -sa, -deckH)
+	e.ctx.Call("moveTo", -sa+sternT, 0)
+	e.ctx.Call("lineTo", -sa, -deckH)
 	e.ctx.Call("lineTo", sa, -deckH)
+	e.ctx.Call("lineTo", sa-bowS*0.25, 0)
 	e.ctx.Call("stroke")
 
 	// Obrys kadłuba poniżej wody — czerwona linia
@@ -977,6 +1055,10 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 	e.ctx.Call("stroke")
 	e.ctx.Call("restore")
 
+	if !showHUD {
+		return
+	}
+
 	// ── Labels ────────────────────────────────────────────────────────────
 	deg := angle * 180 / math.Pi
 	sign := ""
@@ -989,7 +1071,7 @@ func (e *Engine) renderShip(x, y, w, h, heel float64) {
 	} else if math.Abs(heel) >= 0.15 {
 		col = "#ca4"
 	}
-	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "500", 9.0, uiFontRegular))
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "500", 9.0, uiFontBody))
 	e.ctx.Set("textBaseline", "alphabetic")
 	e.ctx.Set("fillStyle", "#2a4050")
 	e.ctx.Set("textAlign", "left")
@@ -1130,6 +1212,7 @@ func (e *Engine) renderPaused() {
 	e.noGlow()
 	e.ctx.Set("fillStyle", "#3a5060")
 	e.text("P / ESC = resume", boardX+float64(COLS)*CELL/2, cy+20, 13, "center")
+	e.text("Q = main menu", boardX+float64(COLS)*CELL/2, cy+36, 13, "center")
 }
 
 // ── game over ─────────────────────────────────────────────────────────────────

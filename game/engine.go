@@ -92,6 +92,7 @@ type Engine struct {
 
 	levelStartScore int // score na początku poziomu
 	levelStartLines int // linie na początku poziomu
+	levelEndPending bool
 
 	curHeel  float64
 	heelAnim float64
@@ -106,6 +107,15 @@ type Engine struct {
 	completedShipLayers int
 
 	keys map[string]bool
+}
+
+func (e *Engine) audioScene() string {
+	switch e.state {
+	case StateMainMenu:
+		return "menu"
+	default:
+		return "game"
+	}
 }
 
 func NewEngine(canvas js.Value) *Engine {
@@ -154,6 +164,7 @@ func (e *Engine) newGame() {
 
 	e.levelStartScore = 0
 	e.levelStartLines = 0
+	e.levelEndPending = false
 	e.levelSumm = nil
 	e.retryPrompt = ""
 	e.gameOverReason = GameOverReasonNone
@@ -195,6 +206,7 @@ func (e *Engine) nextLevel() {
 
 	e.levelStartScore = e.score
 	e.levelStartLines = e.lines
+	e.levelEndPending = false
 	e.levelSumm = nil
 	e.retryPrompt = ""
 	e.gameOverReason = GameOverReasonNone

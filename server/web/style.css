@@ -2,7 +2,8 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --ui-font: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  --ui-font: "IBM Plex Sans", Arial, sans-serif;
+  --display-font: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
 }
 
 /* ── CRT themes ───────────────────────────────────────────────────────────── */
@@ -32,7 +33,7 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  font-family: var(--ui-font);
+  font-family: var(--ui-font), sans-serif;
 }
 
 /* ── monitor shell ────────────────────────────────────────────────────────── */
@@ -75,11 +76,11 @@ body {
 }
 
 .toolbar-title {
-  font-family: var(--ui-font);
+  font-family: var(--display-font), sans-serif;
   font-size: 16px;
   font-weight: 600;
   color: var(--crt-fg);
-  letter-spacing: 2.4px;
+  letter-spacing: 2px;
   text-shadow: 0 0 10px var(--crt-glow);
 }
 
@@ -87,25 +88,25 @@ body {
   background: transparent;
   border: 1px solid var(--crt-dim);
   color: var(--crt-fg);
-  font-family: var(--ui-font);
+  font-family: var(--ui-font), sans-serif;
   font-size: 13px;
   font-weight: 500;
-  padding: 2px 6px;
+  padding: 2px 8px;
   cursor: pointer;
   outline: none;
-  letter-spacing: 1px;
+  letter-spacing: 0.6px;
 }
 .theme-select option {
   background: #0b0c0b;
   color: var(--crt-fg);
-  font-family: var(--ui-font);
+  font-family: var(--ui-font), sans-serif;
 }
 
 .toolbar-label {
-  font-family: var(--ui-font);
+  font-family: var(--ui-font), sans-serif;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1.6px;
+  font-weight: 500;
+  letter-spacing: 1px;
   color: var(--crt-fg);
 }
 
@@ -133,7 +134,7 @@ canvas {
   color: var(--crt-fg);
   font-size: 22px;
   font-weight: 600;
-  letter-spacing: 3px;
+  letter-spacing: 2px;
   text-shadow: 0 0 12px var(--crt-glow);
   background: var(--crt-bg);
 }
@@ -176,7 +177,7 @@ canvas {
   font-weight: 500;
   color: var(--crt-dim);
   text-align: right;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.8px;
   position: relative;
   z-index: 3;
 }

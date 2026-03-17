@@ -9,6 +9,15 @@ func (e *Engine) Update(dt float64) {
 		return
 	}
 
+	levelDurationLimit := levelDuration(e.level)
+	if !e.levelEndPending {
+		e.levelTimer += dt
+		if e.levelTimer >= levelDurationLimit {
+			e.levelTimer = levelDurationLimit
+			e.levelEndPending = true
+		}
+	}
+
 	// Drop timer
 	speed := levelDropSpeed(e.level)
 	e.dropTimer += dt
@@ -28,21 +37,6 @@ func (e *Engine) Update(dt float64) {
 		}
 	} else {
 		e.redTimer = math.Max(0, e.redTimer-dt*0.5)
-	}
-
-	// Poziom czasowy
-	if e.state == StatePlaying {
-		e.levelTimer += dt
-		if e.levelTimer >= levelDuration(e.level) {
-			e.levelSumm = &LevelSummary{
-				Level:      e.level,
-				LinesLevel: e.lines - e.levelStartLines,
-				ScoreLevel: e.score - e.levelStartScore,
-				TotalScore: e.score,
-				TotalLines: e.lines,
-			}
-			e.state = StateLevelEnd
-		}
 	}
 
 	// Decay combo text
@@ -120,19 +114,35 @@ func (e *Engine) lock() {
 		}
 	}
 	e.processBoard()
+	if e.levelEndPending {
+		e.levelSumm = &LevelSummary{
+			Level:      e.level,
+			LinesLevel: e.lines - e.levelStartLines,
+			ScoreLevel: e.score - e.levelStartScore,
+			TotalScore: e.score,
+			TotalLines: e.lines,
+		}
+		e.levelEndPending = false
+		e.state = StateLevelEnd
+		return
+	}
 	e.spawn()
 }
 
 // ── board processing ──────────────────────────────────────────────────────────
 
 func (e *Engine) processBoard() {
+	e.rebuildBodies()
 	if e.activateHaz() {
+		e.rebuildBodies()
 		e.applyGravity()
 	}
 	if e.activateReef() {
+		e.rebuildBodies()
 		e.applyGravity()
 	}
 	if e.clearRows() > 0 {
+		e.rebuildBodies()
 		e.applyGravity()
 	}
 	e.curHeel = e.gridHeel()
@@ -374,42 +384,125 @@ func (e *Engine) activateReef() bool {
 // ── gravity ───────────────────────────────────────────────────────────────────
 
 func (e *Engine) applyGravity() {
-	for c := 0; c < COLS; c++ {
-		col := []*Cell{}
-		for r := ROWS - 1; r >= 0; r-- {
-			if e.grid[r][c] != nil {
-				col = append(col, e.grid[r][c])
+	for {
+		e.rebuildBodies()
+		falling := e.fallingBodies()
+		if len(falling) == 0 {
+			return
+		}
+
+		next := [ROWS][COLS]*Cell{}
+		for r := 0; r < ROWS; r++ {
+			for c := 0; c < COLS; c++ {
+				cell := e.grid[r][c]
+				if cell == nil || falling[cell.Pid] {
+					continue
+				}
+				next[r][c] = cell
 			}
 		}
-		for r := ROWS - 1; r >= 0; r-- {
-			if len(col) > 0 {
-				e.grid[r][c] = col[0]
-				col = col[1:]
-			} else {
-				e.grid[r][c] = nil
+		for pid, body := range e.bodies {
+			for _, cellPos := range body.Cells {
+				cell := e.grid[cellPos.R][cellPos.C]
+				if cell == nil {
+					continue
+				}
+				targetR := cellPos.R
+				if falling[pid] {
+					targetR++
+				}
+				next[targetR][cellPos.C] = cell
+			}
+		}
+		e.grid = next
+	}
+}
+
+func (e *Engine) fallingBodies() map[int]bool {
+	falling := make(map[int]bool, len(e.bodies))
+	for pid := range e.bodies {
+		falling[pid] = true
+	}
+
+	changed := true
+	for changed {
+		changed = false
+		for pid, body := range e.bodies {
+			if !falling[pid] {
+				continue
+			}
+			for _, cellPos := range body.Cells {
+				belowR := cellPos.R + 1
+				if belowR >= ROWS {
+					delete(falling, pid)
+					changed = true
+					break
+				}
+				below := e.grid[belowR][cellPos.C]
+				if below == nil || below.Pid == pid {
+					continue
+				}
+				if !falling[below.Pid] {
+					delete(falling, pid)
+					changed = true
+					break
+				}
 			}
 		}
 	}
+
+	return falling
 }
 
 // ── bodies map for shape outline rendering ───────────────────────────────────
 
 func (e *Engine) rebuildBodies() {
+	visited := [ROWS][COLS]bool{}
 	e.bodies = make(map[int]*PieceBody)
+	nextPid := 0
+	d4 := [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
+
 	for r := 0; r < ROWS; r++ {
 		for c := 0; c < COLS; c++ {
 			cell := e.grid[r][c]
-			if cell == nil {
+			if cell == nil || visited[r][c] {
 				continue
 			}
-			b, ok := e.bodies[cell.Pid]
-			if !ok {
-				b = &PieceBody{Co: cell.Co}
-				e.bodies[cell.Pid] = b
+
+			originalPid := cell.Pid
+			nextPid++
+			body := &PieceBody{Co: cell.Co}
+			queue := []Vec2{{R: r, C: c}}
+			visited[r][c] = true
+
+			for len(queue) > 0 {
+				cur := queue[0]
+				queue = queue[1:]
+				curCell := e.grid[cur.R][cur.C]
+				if curCell == nil {
+					continue
+				}
+				curCell.Pid = nextPid
+				body.Cells = append(body.Cells, Vec2{R: cur.R, C: cur.C})
+
+				for _, d := range d4 {
+					nr, nc := cur.R+d[0], cur.C+d[1]
+					if nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS || visited[nr][nc] {
+						continue
+					}
+					nextCell := e.grid[nr][nc]
+					if nextCell == nil || nextCell.Pid != originalPid {
+						continue
+					}
+					visited[nr][nc] = true
+					queue = append(queue, Vec2{R: nr, C: nc})
+				}
 			}
-			b.Cells = append(b.Cells, Vec2{r, c})
+
+			e.bodies[nextPid] = body
 		}
 	}
+	e.pidCount = nextPid
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
