@@ -99,7 +99,7 @@
       </section>
 
       <div class="menu-actions">
-        <button id="backToMenuBtn" class="menu-secondary-btn" type="button">Back to Menu</button>
+        <button id="backToMenuBtn" class="menu-secondary-btn" type="button">Back to Menu · Esc / Enter</button>
       </div>
     </div>
   </section>
@@ -122,7 +122,12 @@
     <h2 id="scoreModalTitle">Save your run</h2>
     <p class="score-modal-copy" id="scoreSummary">Score 0 · Level 1 · Lines 0</p>
     <label class="score-modal-label" for="nickInput">Three letters or digits</label>
-    <input id="nickInput" class="score-modal-input" type="text" maxlength="3" autocomplete="off" spellcheck="false">
+    <div class="score-modal-slots" id="nickSlots" aria-hidden="true">
+      <span class="score-slot" data-slot="0">_</span>
+      <span class="score-slot" data-slot="1">_</span>
+      <span class="score-slot" data-slot="2">_</span>
+    </div>
+    <input id="nickInput" class="score-modal-input-hidden" type="text" maxlength="3" autocomplete="off" spellcheck="false">
     <p class="score-modal-status" id="scoreStatus">Enter a short tag for the leaderboard.</p>
     <div class="score-modal-actions">
       <button id="scoreSubmitBtn" class="score-submit-btn" type="button">Save Score</button>
@@ -517,6 +522,7 @@
   const scoreSummary = document.getElementById('scoreSummary');
   const scoreStatus = document.getElementById('scoreStatus');
   const nickInput = document.getElementById('nickInput');
+  const nickSlots = Array.from(document.querySelectorAll('.score-slot'));
   const scoreSubmitBtn = document.getElementById('scoreSubmitBtn');
   const scoreSkipBtn = document.getElementById('scoreSkipBtn');
   const themeSelect = document.getElementById('themeSelect');
@@ -550,7 +556,12 @@
       const scores = await res.json();
       if (!Array.isArray(scores) || scores.length === 0) {
         hallList.innerHTML = '<li class="hall-empty">No saved runs yet.</li>';
-        scoreTickerTrack.innerHTML = '<span class="score-ticker-empty">No saved runs yet.</span>';
+        scoreTickerTrack.innerHTML = `
+          <span class="score-ticker-empty">No saved runs yet.</span>
+          <span class="score-ticker-empty">No saved runs yet.</span>
+          <span class="score-ticker-empty">No saved runs yet.</span>
+          <span class="score-ticker-empty">No saved runs yet.</span>
+        `;
         return;
       }
       hallList.innerHTML = scores.map((s, index) => `
@@ -567,26 +578,37 @@
       scoreTickerTrack.innerHTML = `${tickerItems}${tickerItems}`;
     } catch (_) {
       hallList.innerHTML = '<li class="hall-empty">Scores unavailable.</li>';
-      scoreTickerTrack.innerHTML = '<span class="score-ticker-empty">Scores unavailable.</span>';
+      scoreTickerTrack.innerHTML = `
+        <span class="score-ticker-empty">Scores unavailable.</span>
+        <span class="score-ticker-empty">Scores unavailable.</span>
+        <span class="score-ticker-empty">Scores unavailable.</span>
+        <span class="score-ticker-empty">Scores unavailable.</span>
+      `;
     }
   }
 
   refreshHallOfFame();
   window.setInterval(refreshHallOfFame, 30000);
 
+  function applyTheme(theme) {
+    themes.forEach(t => {
+      monitor.classList.remove(t);
+      document.body.classList.remove(t);
+    });
+    monitor.classList.add(theme);
+    document.body.classList.add(theme);
+    window.crtTheme = theme;
+  }
+
   themeSelect.addEventListener('change', () => {
-    themes.forEach(t => monitor.classList.remove(t));
-    monitor.classList.add(themeSelect.value);
-    window.crtTheme = themeSelect.value;
+    applyTheme(themeSelect.value);
   });
-  window.crtTheme = 'theme-amber';
+  applyTheme('theme-amber');
 
   function cycleTheme() {
     const idx = (themes.indexOf(themeSelect.value) + 1) % themes.length;
     themeSelect.value = themes[idx];
-    themes.forEach(t => monitor.classList.remove(t));
-    monitor.classList.add(themes[idx]);
-    window.crtTheme = themes[idx];
+    applyTheme(themes[idx]);
   }
 
   document.addEventListener('keydown', (e) => {
@@ -603,6 +625,7 @@
 
   if (hdrSupported) {
     monitor.classList.add('hdr-mode');
+    document.body.classList.add('hdr-mode');
   }
 
   function dispatchGameKey(code) {
@@ -619,9 +642,24 @@
   openHallBtn.addEventListener('click', () => setMenuScreenMode('hall'));
   backToMenuBtn.addEventListener('click', () => setMenuScreenMode('main'));
 
-  function closeScoreModal() {
+  function closeScoreModal(nextScreen = null) {
     scoreModal.hidden = true;
     scoreStatus.textContent = 'Enter a short tag for the leaderboard.';
+    if (nextScreen) {
+      setMenuScreenMode(nextScreen);
+    }
+  }
+
+  function syncNickSlots() {
+    const value = (nickInput.value || '').toUpperCase();
+    nickSlots.forEach((slot, index) => {
+      slot.textContent = value[index] || '_';
+      slot.classList.toggle('filled', Boolean(value[index]));
+      slot.classList.toggle('active', index === value.length && value.length < 3);
+    });
+    if (value.length === 3) {
+      nickSlots[2].classList.add('active');
+    }
   }
 
   function currentResultPayload() {
@@ -663,7 +701,7 @@
         window.localStorage.setItem(nickStorageKey, nick);
         scoreStatus.textContent = 'Saved.';
         refreshHallOfFame();
-        window.setTimeout(closeScoreModal, 500);
+        window.setTimeout(() => closeScoreModal('hall'), 500);
       }
     } catch (_) {
       scoreStatus.textContent = 'Save failed.';
@@ -674,12 +712,16 @@
   }
 
   scoreSubmitBtn.addEventListener('click', submitScore);
-  scoreSkipBtn.addEventListener('click', closeScoreModal);
+  scoreSkipBtn.addEventListener('click', () => closeScoreModal('hall'));
   scoreModal.addEventListener('keydown', (event) => {
     event.stopPropagation();
   });
+  scoreModal.addEventListener('click', () => {
+    nickInput.focus();
+  });
   nickInput.addEventListener('input', () => {
     nickInput.value = nickInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+    syncNickSlots();
   });
   nickInput.addEventListener('keydown', (event) => {
     if (event.code === 'Enter') {
@@ -689,7 +731,8 @@
   });
 
   try {
-    nickInput.value = (window.localStorage.getItem(nickStorageKey) || '').toUpperCase().slice(0, 3);
+    nickInput.value = '';
+    syncNickSlots();
     setMenuScreenMode(window.localStorage.getItem(hallScreenStorageKey) || 'main');
   } catch (_) {}
 
@@ -830,9 +873,11 @@
     if (event.code === 'KeyH') {
       setMenuScreenMode(menuScreenMode === 'hall' ? 'main' : 'hall');
       event.preventDefault();
-    } else if (event.code === 'Escape' && menuScreenMode === 'hall') {
+      event.stopImmediatePropagation();
+    } else if ((event.code === 'Escape' || event.code === 'Enter') && menuScreenMode === 'hall') {
       setMenuScreenMode('main');
       event.preventDefault();
+      event.stopImmediatePropagation();
     }
   });
 
@@ -850,7 +895,9 @@
       handledEndStateKey = endStateKey;
       scoreSummary.textContent = `Score ${result.score} · Level ${result.level} · Lines ${result.lines}`;
       scoreStatus.textContent = 'Enter a short tag for the leaderboard.';
+      nickInput.value = '';
       scoreModal.hidden = false;
+      syncNickSlots();
       window.setTimeout(() => nickInput.focus(), 0);
     }
     if (result.state === 'playing') {
