@@ -46,7 +46,6 @@ type LevelSummary struct {
 type Cell struct {
 	Co   string
 	Pid  int
-	Wear int  // poziom zużycia 0–3, przypisany przy spawnie
 	RibH bool // żebra poziome (kontener stoi pionowo)
 }
 
@@ -57,7 +56,6 @@ type PieceBody struct {
 
 type Piece struct {
 	Shape []Vec2
-	Wear  []int // Wear[i] odpowiada Shape[i], stabilne przez rotacje
 	Co    string
 	Label string
 	R, C  int
@@ -67,6 +65,13 @@ type FlashMsg struct {
 	Text  string
 	Color string
 	T     float64 // remaining seconds to display
+}
+
+type ExplosionFx struct {
+	X   float64
+	Y   float64
+	T   float64
+	Dur float64
 }
 
 type Engine struct {
@@ -94,11 +99,14 @@ type Engine struct {
 	levelStartScore int // score na początku poziomu
 	levelStartLines int // linie na początku poziomu
 	levelEndPending bool
+	levelPieceCount int
+	lastSpawnCo     string
 
 	curHeel  float64
 	heelAnim float64
 
 	flash             *FlashMsg
+	explosions        []ExplosionFx
 	comboText         string
 	comboTime         float64
 	levelSumm         *LevelSummary // dane do ekranu końca poziomu
@@ -167,7 +175,7 @@ func (e *Engine) enterMainMenu() {
 	score := 0
 	lines := 0
 	level := 0
-	if e.state != StateMainMenu && (e.score > 0 || e.lines > 0) {
+	if (e.state == StateGameOver || e.state == StateVictory) && (e.score > 0 || e.lines > 0) {
 		pending = true
 		score = e.score
 		lines = e.lines
@@ -182,6 +190,7 @@ func (e *Engine) enterMainMenu() {
 	}
 	e.state = StateMainMenu
 	e.flash = nil
+	e.explosions = nil
 	e.levelSumm = nil
 	e.retryPrompt = ""
 	e.gameOverReason = GameOverReasonNone
@@ -206,18 +215,21 @@ func (e *Engine) newGame() {
 	e.levelStartScore = 0
 	e.levelStartLines = 0
 	e.levelEndPending = false
+	e.levelPieceCount = 0
+	e.lastSpawnCo = ""
 	e.levelSumm = nil
 	e.retryPrompt = ""
 	e.gameOverReason = GameOverReasonNone
 	e.completedShipLayers = 0
 
 	e.flash = nil
+	e.explosions = nil
 	e.comboText = ""
 	e.comboTime = 0
 	e.state = StatePlaying
 	e.lastResultPending = false
 
-	e.next = randDef(e.level)
+	e.next = e.drawNextPiece()
 	e.spawn()
 }
 
@@ -250,6 +262,8 @@ func (e *Engine) nextLevel() {
 	e.levelStartScore = e.score
 	e.levelStartLines = e.lines
 	e.levelEndPending = false
+	e.levelPieceCount = 0
+	e.lastSpawnCo = ""
 	e.levelSumm = nil
 	e.retryPrompt = ""
 	e.gameOverReason = GameOverReasonNone
@@ -259,28 +273,50 @@ func (e *Engine) nextLevel() {
 	e.comboTime = 0
 
 	e.state = StatePlaying
-	e.next = randDef(e.level)
+	e.next = e.drawNextPiece()
 	e.spawn()
 }
 
 func (e *Engine) spawn() {
 	d := e.next
 	_, w := shapeDims(d.Shape)
-	wear := make([]int, len(d.Shape))
-	copy(wear, d.Wear)
 	e.cur = Piece{
 		Shape: copyShape(d.Shape),
-		Wear:  wear,
 		Co:    d.Co,
 		Label: d.Label,
 		R:     0,
 		C:     (COLS - w) / 2,
 	}
-	e.next = randDef(e.level)
+	e.levelPieceCount++
+	e.lastSpawnCo = d.Co
+	e.next = e.drawNextPiece()
 	if !e.canFit(0, e.cur.C, e.cur.Shape) {
 		e.gameOverReason = GameOverReasonHoldFull
 		e.state = StateGameOver
 	}
+}
+
+func (e *Engine) drawNextPiece() PieceDef {
+	d := randDef(e.level)
+	if e.level != 1 {
+		return d
+	}
+	if e.levelPieceCount >= 3 {
+		return d
+	}
+	if e.lastSpawnCo == "" {
+		return d
+	}
+	// Level 1 opening should not start with special-cargo streaks.
+	if (e.lastSpawnCo == "reef" || e.lastSpawnCo == "haz") && d.Co == e.lastSpawnCo {
+		for i := 0; i < 6; i++ {
+			alt := randDef(e.level)
+			if alt.Co != e.lastSpawnCo {
+				return alt
+			}
+		}
+	}
+	return d
 }
 
 func randomReplayPrompt() string {

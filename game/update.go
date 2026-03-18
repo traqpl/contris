@@ -54,6 +54,16 @@ func (e *Engine) Update(dt float64) {
 	if e.flash != nil {
 		e.flash.T -= dt
 	}
+	if len(e.explosions) > 0 {
+		next := e.explosions[:0]
+		for _, fx := range e.explosions {
+			fx.T -= dt
+			if fx.T > 0 {
+				next = append(next, fx)
+			}
+		}
+		e.explosions = next
+	}
 }
 
 // ── movement ─────────────────────────────────────────────────────────────────
@@ -112,10 +122,10 @@ func (e *Engine) lock() {
 	h, w := shapeDims(e.cur.Shape)
 	ribH := h > w // więcej wierszy niż kolumn → kontener pionowy → żebra poziome
 	freezeRows := map[int]bool{}
-	for i, v := range e.cur.Shape {
+	for _, v := range e.cur.Shape {
 		r, c := e.cur.R+v.R, e.cur.C+v.C
 		if r >= 0 && r < ROWS {
-			cell := &Cell{Co: e.cur.Co, Pid: pid, Wear: e.cur.Wear[i], RibH: ribH}
+			cell := &Cell{Co: e.cur.Co, Pid: pid, RibH: ribH}
 			if e.cur.Co == "reef" {
 				freezeRows[r] = true
 			}
@@ -184,7 +194,10 @@ func (e *Engine) heelFromExtra(extra []int) float64 {
 	if total == 0 {
 		return 0
 	}
-	return moment / (total * CENTER)
+	// Keep trim sensitivity from flattening out as the hold fills up.
+	// After roughly one row of cargo, normalize against a fixed reference load.
+	load := math.Min(total, TrimReferenceCells)
+	return moment / (load * CENTER)
 }
 
 func (e *Engine) gridHeel() float64 { return e.heelFromExtra(nil) }
@@ -333,6 +346,14 @@ func (e *Engine) activateHaz() bool {
 				rows := map[int]bool{}
 				for _, pos := range grp {
 					rows[pos[0]] = true
+				}
+				for row := range rows {
+					e.explosions = append(e.explosions, ExplosionFx{
+						X:   boardX + float64(COLS)*CELL/2,
+						Y:   boardY + (float64(row)+0.5)*CELL,
+						T:   0.55,
+						Dur: 0.55,
+					})
 				}
 				for row := range rows {
 					e.grid[row] = [COLS]*Cell{}

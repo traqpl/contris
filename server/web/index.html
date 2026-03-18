@@ -105,7 +105,7 @@
   </section>
 
   <div class="canvas-wrap">
-    <canvas id="gameCanvas" width="522" height="712"></canvas>
+    <canvas id="gameCanvas" width="562" height="740"></canvas>
     <div id="loading">LOADING...</div>
   </div>
 
@@ -129,10 +129,7 @@
     </div>
     <input id="nickInput" class="score-modal-input-hidden" type="text" maxlength="3" autocomplete="off" spellcheck="false">
     <p class="score-modal-status" id="scoreStatus">Enter a short tag for the leaderboard.</p>
-    <div class="score-modal-actions">
-      <button id="scoreSubmitBtn" class="score-submit-btn" type="button">Save Score</button>
-      <button id="scoreSkipBtn" class="score-skip-btn" type="button">Skip</button>
-    </div>
+    <p class="score-modal-legend"><strong>Enter</strong> save score <span>·</span> <strong>Esc</strong> skip</p>
   </div>
 </div>
 
@@ -523,14 +520,24 @@
   const scoreStatus = document.getElementById('scoreStatus');
   const nickInput = document.getElementById('nickInput');
   const nickSlots = Array.from(document.querySelectorAll('.score-slot'));
-  const scoreSubmitBtn = document.getElementById('scoreSubmitBtn');
-  const scoreSkipBtn = document.getElementById('scoreSkipBtn');
   const themeSelect = document.getElementById('themeSelect');
   const themes = ['theme-amber', 'theme-green', 'theme-cyan'];
   const nickStorageKey = 'cargo-shift-nick';
   const hallScreenStorageKey = 'cargo-shift-menu-screen';
   let handledEndStateKey = '';
   let menuScreenMode = 'main';
+  let scoreSubmitPending = false;
+
+  function setTickerContent(itemsHtml) {
+    const groupHtml = `<div class="score-ticker-group">${itemsHtml}</div>`;
+    scoreTickerTrack.innerHTML = `${groupHtml}${groupHtml}`;
+    const firstGroup = scoreTickerTrack.firstElementChild;
+    const distance = firstGroup ? firstGroup.scrollWidth : 0;
+    const pixelsPerSecond = 72;
+    const duration = Math.max(8, distance / pixelsPerSecond);
+    scoreTickerTrack.style.setProperty('--ticker-distance', `${distance}px`);
+    scoreTickerTrack.style.setProperty('--ticker-duration', `${duration}s`);
+  }
 
   function setMenuScreenMode(mode) {
     menuScreenMode = mode === 'hall' ? 'hall' : 'main';
@@ -556,12 +563,12 @@
       const scores = await res.json();
       if (!Array.isArray(scores) || scores.length === 0) {
         hallList.innerHTML = '<li class="hall-empty">No saved runs yet.</li>';
-        scoreTickerTrack.innerHTML = `
+        setTickerContent(`
           <span class="score-ticker-empty">No saved runs yet.</span>
           <span class="score-ticker-empty">No saved runs yet.</span>
           <span class="score-ticker-empty">No saved runs yet.</span>
           <span class="score-ticker-empty">No saved runs yet.</span>
-        `;
+        `);
         return;
       }
       hallList.innerHTML = scores.map((s, index) => `
@@ -575,15 +582,15 @@
       const tickerItems = scores.map((s, index) =>
         `<span class="score-ticker-item">${index + 1}. ${escapeHtml(s.nick)} ${escapeHtml(s.score)}pt L${escapeHtml(s.level)}</span>`
       ).join('');
-      scoreTickerTrack.innerHTML = `${tickerItems}${tickerItems}`;
+      setTickerContent(tickerItems);
     } catch (_) {
       hallList.innerHTML = '<li class="hall-empty">Scores unavailable.</li>';
-      scoreTickerTrack.innerHTML = `
+      setTickerContent(`
         <span class="score-ticker-empty">Scores unavailable.</span>
         <span class="score-ticker-empty">Scores unavailable.</span>
         <span class="score-ticker-empty">Scores unavailable.</span>
         <span class="score-ticker-empty">Scores unavailable.</span>
-      `;
+      `);
     }
   }
 
@@ -674,14 +681,16 @@
   }
 
   async function submitScore() {
+    if (scoreSubmitPending) {
+      return;
+    }
     const payload = currentResultPayload();
     const nick = nickInput.value.trim().toUpperCase();
     if (!/^[A-Z0-9]{3}$/.test(nick)) {
       scoreStatus.textContent = 'Use exactly 3 letters or digits.';
       return;
     }
-    scoreSubmitBtn.disabled = true;
-    scoreSkipBtn.disabled = true;
+    scoreSubmitPending = true;
     scoreStatus.textContent = 'Saving score...';
     try {
       const res = await fetch('/api/scores', {
@@ -706,14 +715,25 @@
     } catch (_) {
       scoreStatus.textContent = 'Save failed.';
     } finally {
-      scoreSubmitBtn.disabled = false;
-      scoreSkipBtn.disabled = false;
+      scoreSubmitPending = false;
     }
   }
 
-  scoreSubmitBtn.addEventListener('click', submitScore);
-  scoreSkipBtn.addEventListener('click', () => closeScoreModal('hall'));
   scoreModal.addEventListener('keydown', (event) => {
+    if (event.code === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      closeScoreModal('hall');
+      return;
+    }
+    if (event.code === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      submitScore();
+      return;
+    }
     event.stopPropagation();
   });
   scoreModal.addEventListener('click', () => {
@@ -724,16 +744,25 @@
     syncNickSlots();
   });
   nickInput.addEventListener('keydown', (event) => {
-    if (event.code === 'Enter') {
-      submitScore();
+    if (event.code === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      closeScoreModal('hall');
+      return;
+    }
+    if (event.code === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      submitScore();
     }
   });
 
   try {
     nickInput.value = '';
     syncNickSlots();
-    setMenuScreenMode(window.localStorage.getItem(hallScreenStorageKey) || 'main');
+    setMenuScreenMode('main');
   } catch (_) {}
 
   function drawMenuContainer(x, y, w, h, tone) {
@@ -889,9 +918,8 @@
       drawMenuShip();
     }
     const result = currentResultPayload();
-    const endState = result.pending || result.state === 'game_over' || result.state === 'victory';
     const endStateKey = `${result.state}:${result.pending}:${result.score}:${result.lines}:${result.level}`;
-    if (endState && (result.score > 0 || result.lines > 0) && handledEndStateKey !== endStateKey) {
+    if (result.pending && (result.score > 0 || result.lines > 0) && handledEndStateKey !== endStateKey) {
       handledEndStateKey = endStateKey;
       scoreSummary.textContent = `Score ${result.score} · Level ${result.level} · Lines ${result.lines}`;
       scoreStatus.textContent = 'Enter a short tag for the leaderboard.';

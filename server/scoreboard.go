@@ -28,11 +28,7 @@ type ScoreStore struct {
 
 func NewScoreStore(dbPath string) *ScoreStore {
 	if dbPath == "" {
-		dir, err := os.UserConfigDir()
-		if err != nil {
-			dir = "."
-		}
-		dbPath = filepath.Join(dir, "cargo-shift", "scores.db")
+		dbPath = "scores.db"
 	}
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		log.Fatalf("scores db dir: %v", err)
@@ -71,7 +67,11 @@ func (s *ScoreStore) Top(n int) []ScoreEntry {
 		log.Printf("scores query: %v", err)
 		return nil
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("scores close rows: %v", err)
+		}
+	}()
 
 	var entries []ScoreEntry
 	for rows.Next() {
@@ -80,6 +80,10 @@ func (s *ScoreStore) Top(n int) []ScoreEntry {
 			continue
 		}
 		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("scores rows iteration: %v", err)
+		return nil
 	}
 	return entries
 }

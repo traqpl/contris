@@ -20,7 +20,6 @@ var baseShapes = map[string][]Vec2{
 
 type PieceDef struct {
 	Shape []Vec2
-	Wear  []int
 	Co    string
 	Label string
 	W     int // spawn weight
@@ -91,16 +90,27 @@ func init() {
 }
 
 func pieceWeightForLevel(d PieceDef, level int) int {
-	if d.Co != "reef" {
-		return d.W
-	}
-	switch {
-	case level <= 1:
-		return 1
-	case level <= 3:
-		return 2
+	switch d.Co {
+	case "reef":
+		switch {
+		case level <= 1:
+			return 2
+		case level <= 3:
+			return 3
+		default:
+			return 4
+		}
+	case "haz":
+		switch {
+		case level <= 1:
+			return 3
+		case level <= 3:
+			return 3
+		default:
+			return 4
+		}
 	default:
-		return 3
+		return d.W
 	}
 }
 
@@ -119,20 +129,7 @@ func randDef(level int) PieceDef {
 	return newDef(pool[0])
 }
 
-// newDef kopiuje definicję i przypisuje stabilny wear każdej komórce.
 func newDef(d PieceDef) PieceDef {
 	shape := copyShape(d.Shape)
-	wear := make([]int, len(shape))
-	for i := range wear {
-		v := rand.Intn(100)
-		switch {
-		case v >= 92:
-			wear[i] = 3
-		case v >= 72:
-			wear[i] = 2
-		default:
-			wear[i] = 0
-		}
-	}
-	return PieceDef{Shape: shape, Wear: wear, Co: d.Co, Label: d.Label, W: d.W}
+	return PieceDef{Shape: shape, Co: d.Co, Label: d.Label, W: d.W}
 }

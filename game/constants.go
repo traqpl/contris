@@ -10,18 +10,19 @@ const (
 	CENTER = float64(COLS-1) / 2.0
 
 	boardX = 0.0
-	boardY = 16.0
+	boardY = 44.0
 	sideX  = COLS*CELL + 10
-	sideW  = 224.0
+	sideW  = 264.0
 
 	shipGap   = 32.0
 	shipViewH = 88.0
 
-	canvasW = COLS*CELL + 10 + sideW                   // 298 + 224 = 522
-	canvasH = ROWS*CELL + boardY + shipGap + shipViewH // 576 + 16 + 32 + 88 = 712
+	canvasW = COLS*CELL + 10 + sideW                   // 298 + 264 = 562
+	canvasH = ROWS*CELL + boardY + shipGap + shipViewH // 576 + 44 + 32 + 88 = 740
 
 	RedLimit             = 9.0 // seconds in red zone before ship sinks
 	ReeferFreezeDuration = 20.0
+	TrimReferenceCells   = float64(COLS)
 
 	MaxLevel = 5
 )

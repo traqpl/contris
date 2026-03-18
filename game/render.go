@@ -263,7 +263,6 @@ func (e *Engine) renderHeader() {
 	e.ctx.Set("fillStyle", "#3a5060")
 	e.noGlow()
 	e.text(fmt.Sprintf("LVL %d/%d", e.level, MaxLevel), canvasW-4, 20, 18, "right")
-	e.text(fmt.Sprintf("%d", e.score), 4, 20, 18, "left")
 }
 
 // ── board ─────────────────────────────────────────────────────────────────────
@@ -414,7 +413,7 @@ func (e *Engine) renderBoard() {
 			if cell == nil {
 				continue
 			}
-			e.drawCell(boardX+float64(c)*CELL, boardY+float64(r)*CELL, CELL, cell.Co, 1.0, cell.Wear, c, r, cell.RibH, e.rowFrozenTime(r) > 0)
+			e.drawCell(boardX+float64(c)*CELL, boardY+float64(r)*CELL, CELL, cell.Co, 1.0, cell.RibH, e.rowFrozenTime(r) > 0)
 		}
 	}
 	seenReefer := map[int]bool{}
@@ -496,6 +495,8 @@ func (e *Engine) renderBoard() {
 		}
 	}
 
+	e.renderExplosions()
+
 	if e.state != StatePlaying {
 		return
 	}
@@ -508,11 +509,11 @@ func (e *Engine) renderBoard() {
 	curH, curW := shapeDims(e.cur.Shape)
 	curRibH := curH > curW
 	if gr != e.cur.R {
-		for i, v := range e.cur.Shape {
+		for _, v := range e.cur.Shape {
 			e.drawCell(
 				boardX+float64(e.cur.C+v.C)*CELL,
 				boardY+float64(gr+v.R)*CELL,
-				CELL, e.cur.Co, 0.18, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH, e.rowFrozenTime(gr+v.R) > 0,
+				CELL, e.cur.Co, 0.18, curRibH, e.rowFrozenTime(gr+v.R) > 0,
 			)
 		}
 		if e.cur.Co == "reef" {
@@ -529,11 +530,11 @@ func (e *Engine) renderBoard() {
 	}
 
 	// Active piece
-	for i, v := range e.cur.Shape {
+	for _, v := range e.cur.Shape {
 		e.drawCell(
 			boardX+float64(e.cur.C+v.C)*CELL,
 			boardY+float64(e.cur.R+v.R)*CELL,
-			CELL, e.cur.Co, 1.0, e.cur.Wear[i], e.cur.C+v.C, v.R, curRibH, e.rowFrozenTime(e.cur.R+v.R) > 0,
+			CELL, e.cur.Co, 1.0, curRibH, e.rowFrozenTime(e.cur.R+v.R) > 0,
 		)
 	}
 	if e.cur.Co == "reef" {
@@ -575,7 +576,7 @@ func (e *Engine) renderBoard() {
 
 // ── cell drawing ──────────────────────────────────────────────────────────────
 
-func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seedC, seedR int, ribH, frozen bool) {
+func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, ribH, frozen bool) {
 	e.ctx.Call("save")
 	if alpha < 1.0 {
 		e.ctx.Set("globalAlpha", alpha)
@@ -600,34 +601,10 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 	default:
 		// ── Kontener właściwy ─────────────────────────────────────────────
 
-		// Deterministyczny hash — stabilne współrzędne siatki zamiast pikseli,
-		// żeby ślady nie "chodziły" gdy klocek opada.
-		h := wear*2654435761 + seedC*40503 + seedR*12345
-		if h < 0 {
-			h = -h
-		}
-
-		// ── Odgięcia krawędzi jako część zużycia ─────────────────────────
-		warpPx := 0.0
-		if wear >= 3 {
-			warpPx = float64(2 + (h>>10)%2)
-		} else if wear == 2 && h%100 < 35 {
-			warpPx = float64(1 + (h>>10)%2)
-		}
-		if warpPx != 0 {
-			if (h>>12)%2 == 0 {
-				warpPx = -warpPx
-			}
-			shear := warpPx / sz
-			centerY := y + sz/2
-			e.ctx.Call("transform", 1, 0, shear, 1, -shear*centerY, 0)
-		}
-
 		// ── Żebra karbowania — kierunek zależny od orientacji klocka ────────
 		// Spójna faza globalna: żebra sąsiednich cel nie tworzą podwójnej szczeliny.
 		ribSpacing := 7.0
 		ribPhase := 4.0
-		ribLines := make([]float64, 0, int(sz/ribSpacing)+2)
 		if !ribH {
 			// pionowe żebra (kontener leży poziomo)
 			start := math.Floor((x-ribPhase)/ribSpacing)*ribSpacing + ribPhase
@@ -635,7 +612,6 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 				if rx < x || rx >= x+sz {
 					continue
 				}
-				ribLines = append(ribLines, rx)
 				e.ctx.Set("fillStyle", "rgba(0,0,0,0.22)")
 				e.ctx.Call("fillRect", rx, y, 1, sz)
 				e.ctx.Set("fillStyle", "rgba(255,255,255,0.09)")
@@ -648,39 +624,10 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, wear, seed
 				if ry < y || ry >= y+sz {
 					continue
 				}
-				ribLines = append(ribLines, ry)
 				e.ctx.Set("fillStyle", "rgba(0,0,0,0.22)")
 				e.ctx.Call("fillRect", x, ry, sz, 1)
 				e.ctx.Set("fillStyle", "rgba(255,255,255,0.09)")
 				e.ctx.Call("fillRect", x, ry+1, sz, 1)
-			}
-		}
-
-		// ── Ślady zużycia — tylko wear == 3 ──────────────────────────────
-		if wear == 3 {
-			dirtColor := "rgba(145,58,8,0.45)"
-			dirtW := 2.0
-			if co == "orange" {
-				dirtColor = "rgba(10,5,2,0.42)"
-				dirtW = 3.0
-			}
-			for i, rl := range ribLines {
-				mod := 3
-				if co == "orange" {
-					mod = 4
-				}
-				if (h+i)%mod == 0 {
-					e.ctx.Set("fillStyle", dirtColor)
-					if !ribH {
-						sH := sz*0.28 + float64((h+i*7)%int(sz*35/100))
-						sY := y + float64((h*3+i*11)%int(sz*55/100))
-						e.ctx.Call("fillRect", rl-1, sY, dirtW, sH)
-					} else {
-						sW := sz*0.28 + float64((h+i*7)%int(sz*35/100))
-						sX := x + float64((h*3+i*11)%int(sz*55/100))
-						e.ctx.Call("fillRect", sX, rl-1, sW, dirtW)
-					}
-				}
 			}
 		}
 	}
@@ -737,6 +684,60 @@ func (e *Engine) drawShapeOutline(cells []Vec2, offR, offC int, color string, lw
 		}
 	}
 	e.ctx.Call("stroke")
+}
+
+func (e *Engine) renderExplosions() {
+	if len(e.explosions) == 0 {
+		return
+	}
+	for _, fx := range e.explosions {
+		p := 1 - fx.T/fx.Dur
+		if p < 0 {
+			p = 0
+		}
+		alpha := math.Max(0, fx.T/fx.Dur)
+		ringR := 10 + p*54
+		coreR := 8 + p*14
+
+		e.ctx.Call("save")
+		e.ctx.Set("globalAlpha", alpha)
+
+		radial := e.ctx.Call("createRadialGradient", fx.X, fx.Y, 0, fx.X, fx.Y, ringR)
+		radial.Call("addColorStop", 0, "rgba(255,250,210,0.95)")
+		radial.Call("addColorStop", 0.28, "rgba(255,180,40,0.85)")
+		radial.Call("addColorStop", 0.62, "rgba(255,80,20,0.42)")
+		radial.Call("addColorStop", 1, "rgba(255,80,20,0)")
+		e.ctx.Set("fillStyle", radial)
+		e.ctx.Call("beginPath")
+		e.ctx.Call("arc", fx.X, fx.Y, ringR, 0, math.Pi*2)
+		e.ctx.Call("fill")
+
+		e.ctx.Set("strokeStyle", fmt.Sprintf("rgba(255,210,80,%.3f)", alpha*0.9))
+		e.ctx.Set("lineWidth", 2.5-(p*1.2))
+		e.ctx.Call("beginPath")
+		e.ctx.Call("arc", fx.X, fx.Y, ringR*0.72, 0, math.Pi*2)
+		e.ctx.Call("stroke")
+
+		e.ctx.Set("fillStyle", fmt.Sprintf("rgba(255,245,220,%.3f)", alpha))
+		e.ctx.Call("beginPath")
+		e.ctx.Call("arc", fx.X, fx.Y, coreR, 0, math.Pi*2)
+		e.ctx.Call("fill")
+
+		for i := 0; i < 10; i++ {
+			ang := float64(i) * (math.Pi * 2 / 10)
+			dist := 16 + p*28 + float64(i%3)*3
+			sparkX := fx.X + math.Cos(ang)*dist
+			sparkY := fx.Y + math.Sin(ang)*dist
+			e.ctx.Set("strokeStyle", fmt.Sprintf("rgba(255,140,40,%.3f)", alpha*0.8))
+			e.ctx.Set("lineWidth", 1.3)
+			e.ctx.Call("beginPath")
+			e.ctx.Call("moveTo", fx.X+math.Cos(ang)*(dist-8), fx.Y+math.Sin(ang)*(dist-8))
+			e.ctx.Call("lineTo", sparkX, sparkY)
+			e.ctx.Call("stroke")
+		}
+
+		e.ctx.Call("restore")
+	}
 }
 
 func (e *Engine) drawReeferOverlayRect(x, y, w, h, alpha float64, frozen bool) {
@@ -814,8 +815,8 @@ func (e *Engine) renderSidebar() {
 		ox := x + (sideW-float64(nw)*s)/2
 		oy := y + (68-float64(nh)*s)/2
 		nextRibH := nh > nw
-		for i, v := range e.next.Shape {
-			e.drawCell(ox+float64(v.C)*s, oy+float64(v.R)*s, s, e.next.Co, 1.0, e.next.Wear[i], v.C, v.R, nextRibH, false)
+		for _, v := range e.next.Shape {
+			e.drawCell(ox+float64(v.C)*s, oy+float64(v.R)*s, s, e.next.Co, 1.0, nextRibH, false)
 		}
 		if e.next.Co == "reef" {
 			rx, ry, rw, rh := reeferBounds(e.next.Shape, 0, 0, s, ox, oy)
@@ -935,11 +936,11 @@ func (e *Engine) renderSidebar() {
 		icon  string
 	}
 	rules := []ruleItem{
-		{left: "GREEN  clear row", right: "200"},
-		{left: "YELLOW clear row", right: "100"},
-		{left: "RED    no row clear", right: ""},
-		{left: "DG pair explodes", right: "-50", icon: "haz"},
-		{left: "REEFER freezes row", right: "20s", icon: "reef"},
+		{left: "GREEN clear", right: "200"},
+		{left: "YELLOW clear", right: "100"},
+		{left: "RED no clear", right: ""},
+		{left: "DG pair boom", right: "-50", icon: "haz"},
+		{left: "REEFER freeze", right: "20s", icon: "reef"},
 	}
 	shortcuts := []struct{ key, action string }{
 		{"ARROWS", "move"},
@@ -951,72 +952,95 @@ func (e *Engine) renderSidebar() {
 		{"M / T", "mute / theme"},
 	}
 
-	ruleLineH := 16.0
-	rulesPanelH := 28.0 + float64(len(rules))*ruleLineH
-	keyH := 18.0
-	shortcutsPanelH := 30.0 + float64(len(shortcuts))*keyH
-	blockGap := 8.0
-	blockH := rulesPanelH + blockGap + shortcutsPanelH
-	sideBottom := boardY + float64(ROWS)*CELL
-	ry := sideBottom - blockH
-	if ry < y {
-		ry = y
+	titleH := 24.0
+	sectionGap := 8.0
+	innerColGap := 10.0
+	rowsFor := func(count int) int {
+		if count <= 0 {
+			return 0
+		}
+		return (count + 1) / 2
 	}
-	y = ry
+	rulesRows := rowsFor(len(rules))
+	shortcutsRows := rowsFor(len(shortcuts))
+	sideBottom := boardY + float64(ROWS)*CELL
+	shortcutsLineH := 15.0
+	shortcutsPanelH := titleH + float64(shortcutsRows)*shortcutsLineH + 8.0
+	rulesTop := y
+	shortcutsTop := sideBottom - shortcutsPanelH
+	if shortcutsTop < rulesTop+sectionGap+titleH+32 {
+		shortcutsTop = rulesTop + sectionGap + titleH + 32
+	}
+	rulesPanelH := shortcutsTop - sectionGap - rulesTop
+	rulesLineH := math.Max(18.0, (rulesPanelH-titleH-10.0)/float64(rulesRows))
 
 	panelX := x + 2
 	panelW := sideW - 4
-	keyColW := 78.0
-	actionX := panelX + keyColW + 14
+	colW := (panelW - innerColGap) / 2
 
-	e.ctx.Set("fillStyle", "rgba(8,14,20,0.82)")
-	e.ctx.Call("fillRect", panelX, y, panelW, rulesPanelH)
-	e.ctx.Set("strokeStyle", "#22364a")
-	e.ctx.Set("lineWidth", 1)
-	e.ctx.Call("strokeRect", panelX+0.5, y+0.5, panelW-1, rulesPanelH-1)
-
-	e.ctx.Set("fillStyle", dim)
-	e.text("RULES", x+sideW/2, y+18, 14, "center")
-	y += 30
-
-	for _, rule := range rules {
-		leftX := panelX + 8.0
-		if rule.icon != "" {
-			iconSz := 14.0
-			e.drawCell(leftX, y+1, iconSz, rule.icon, 1.0, 0, 0, 0, false, false)
-			leftX += iconSz + 6
-		}
-		e.crispGlow(rule.left, leftX, y+12, 11, "left", color)
-		if rule.right != "" {
-			e.ctx.Set("fillStyle", "#607888")
-			e.text(rule.right, panelX+panelW-8, y+12, 11, "right")
-		}
-		y += ruleLineH
+	drawSectionFrame := func(topY, h float64, title string) {
+		e.ctx.Set("fillStyle", "rgba(8,14,20,0.82)")
+		e.ctx.Call("fillRect", panelX, topY, panelW, h)
+		e.ctx.Set("strokeStyle", "#22364a")
+		e.ctx.Set("lineWidth", 1)
+		e.ctx.Call("strokeRect", panelX+0.5, topY+0.5, panelW-1, h-1)
+		e.ctx.Set("fillStyle", dim)
+		e.text(title, x+sideW/2, topY+17, 13, "center")
+		e.ctx.Set("strokeStyle", "rgba(58,80,96,0.6)")
+		e.ctx.Set("lineWidth", 1)
+		e.ctx.Call("beginPath")
+		e.ctx.Call("moveTo", panelX+6, topY+titleH)
+		e.ctx.Call("lineTo", panelX+panelW-6, topY+titleH)
+		e.ctx.Call("stroke")
+		e.ctx.Call("beginPath")
+		e.ctx.Call("moveTo", panelX+colW+innerColGap/2, topY+titleH+4)
+		e.ctx.Call("lineTo", panelX+colW+innerColGap/2, topY+h-6)
+		e.ctx.Call("stroke")
 	}
 
-	y += blockGap
+	drawSectionFrame(rulesTop, rulesPanelH, "RULES")
+	rulesBaseY := rulesTop + titleH + 4
+	drawRuleIcon := func(kind string, x, y, sz float64) float64 {
+		switch kind {
+		case "reef":
+			e.drawCell(x, y, sz, "reef", 1.0, false, false)
+			e.drawCell(x+sz, y, sz, "reef", 1.0, false, false)
+			e.drawReeferOverlayRect(x, y, sz*2, sz, 1.0, false)
+			return sz*2 + 6
+		case "haz":
+			e.drawCell(x, y, sz, "haz", 1.0, false, false)
+			return sz + 6
+		default:
+			return 0
+		}
+	}
+	for i, rule := range rules {
+		col := i / rulesRows
+		row := i % rulesRows
+		colX := panelX + float64(col)*(colW+innerColGap)
+		rowY := rulesBaseY + float64(row)*rulesLineH
+		leftX := colX + 8.0
+		if rule.icon != "" {
+			iconSz := math.Min(18.0, rulesLineH-4.0)
+			leftX += drawRuleIcon(rule.icon, leftX, rowY+1, iconSz)
+		}
+		e.crispGlow(rule.left, leftX, rowY+13, 11, "left", color)
+		if rule.right != "" {
+			e.ctx.Set("fillStyle", "#607888")
+			e.text(rule.right, colX+colW-8, rowY+13, 11, "right")
+		}
+	}
 
-	e.ctx.Set("fillStyle", "rgba(8,14,20,0.82)")
-	e.ctx.Call("fillRect", panelX, y, panelW, shortcutsPanelH)
-	e.ctx.Set("strokeStyle", "#22364a")
-	e.ctx.Set("lineWidth", 1)
-	e.ctx.Call("strokeRect", panelX+0.5, y+0.5, panelW-1, shortcutsPanelH-1)
-
-	e.ctx.Set("fillStyle", dim)
-	e.text("SHORTCUTS", x+sideW/2, y+18, 14, "center")
-	e.ctx.Set("strokeStyle", "rgba(58,80,96,0.6)")
-	e.ctx.Set("lineWidth", 1)
-	e.ctx.Call("beginPath")
-	e.ctx.Call("moveTo", panelX+keyColW, y+24)
-	e.ctx.Call("lineTo", panelX+keyColW, y+shortcutsPanelH-10)
-	e.ctx.Call("stroke")
-	y += 32
-
-	for _, item := range shortcuts {
-		e.crispGlow(item.key, panelX+10, y+13, 12, "left", color)
+	drawSectionFrame(shortcutsTop, shortcutsPanelH, "SHORTCUTS")
+	shortcutsBaseY := shortcutsTop + titleH + 4
+	for i, item := range shortcuts {
+		col := i / shortcutsRows
+		row := i % shortcutsRows
+		colX := panelX + float64(col)*(colW+innerColGap)
+		rowY := shortcutsBaseY + float64(row)*shortcutsLineH
+		e.crispGlow(item.key, colX+8, rowY+11, 10, "left", color)
 		e.ctx.Set("fillStyle", "#607888")
-		e.text(item.action, actionX, y+13, 12, "left")
-		y += keyH
+		e.text(item.action, colX+colW-8, rowY+11, 10, "right")
 	}
 }
 
@@ -1253,12 +1277,11 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 	}
 
 	margin := shipW * 0.012
-	superGap := shipW * 0.014
-	midLeft := fx + fw + superGap
-	midRight := bx - superGap
-	midCount := int(math.Floor((midRight - midLeft + stackGap) / (stackW + stackGap)))
-	if midCount < 1 {
-		midCount = 1
+	holdLeft := shipLeft + margin
+	holdRight := shipRight - margin
+	holdCount := int(math.Floor((holdRight - holdLeft + stackGap) / (stackW + stackGap)))
+	if holdCount < 1 {
+		holdCount = 1
 	}
 
 	// ── Ukończone levele: ładunek rośnie od dna kadłuba ───────────────────
@@ -1273,9 +1296,7 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 		} else {
 			holdFillH = lowerRangeH + upperRangeH*float64(e.completedShipLayers-3)/2.0
 		}
-		drawSegment(shipLeft+margin, fx-superGap, 2, "left", hullD, holdFillH)
-		drawSegment(midLeft, midRight, midCount, "center", hullD, holdFillH)
-		drawSegment(bx+bw+superGap, shipRight-margin, 3, "right", hullD, holdFillH)
+		drawSegment(holdLeft, holdRight, holdCount, "center", hullD, holdFillH)
 	}
 
 	// ── Nadbudówka 1: mostek ──────────────────────────────────────────────
@@ -1517,13 +1538,17 @@ func (e *Engine) renderGameOver() {
 	titleCol := "#f84"
 	titleText := "CARGO HOLD FULL"
 	titleSize := 22.0
+	subtitleLines := []string{}
 	if e.gameOverReason == GameOverReasonShipSank {
 		titleCol = "#4af"
-		titleText = e.retryPrompt
-		if titleText == "" {
-			titleText = "Play again."
+		titleText = "SHIP SANK"
+		titleSize = 24
+		subtitleLines = []string{
+			"Trim stayed too long in the red zone.",
+			"The vessel lost stability and went under.",
 		}
-		titleSize = 18
+	} else if e.retryPrompt != "" {
+		subtitleLines = []string{e.retryPrompt}
 	}
 
 	cy := boardY + float64(ROWS)*CELL/2
@@ -1531,10 +1556,20 @@ func (e *Engine) renderGameOver() {
 	e.ctx.Set("fillStyle", titleCol)
 	e.text(titleText, boardX+float64(COLS)*CELL/2, cy-8, titleSize, "center")
 	e.noGlow()
+
+	y := cy + 14.0
+	if len(subtitleLines) > 0 {
+		e.ctx.Set("fillStyle", "#6a8ca4")
+		for _, line := range subtitleLines {
+			e.text(line, boardX+float64(COLS)*CELL/2, y, 13, "center")
+			y += 16
+		}
+		y += 4
+	}
+
 	e.ctx.Set("fillStyle", "#3a5060")
-	e.text(fmt.Sprintf("score: %d", e.score), boardX+float64(COLS)*CELL/2, cy+14, 16, "center")
-	e.ctx.Set("fillStyle", "#2a4050")
-	e.text("SPACE / ENTER = main menu", boardX+float64(COLS)*CELL/2, cy+30, 14, "center")
-	e.ctx.Set("fillStyle", "#4a4040")
-	e.text("ESC = main menu", boardX+float64(COLS)*CELL/2, cy+46, 14, "center")
+	e.text(fmt.Sprintf("score: %d", e.score), boardX+float64(COLS)*CELL/2, y, 16, "center")
+	y += 22
+	e.ctx.Set("fillStyle", "#8aa6ba")
+	e.text("ENTER / ESC = save score", boardX+float64(COLS)*CELL/2, y, 14, "center")
 }
