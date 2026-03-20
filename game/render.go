@@ -26,7 +26,7 @@ func (e *Engine) crtColor() string {
 	if e.hdrMode() {
 		switch theme {
 		case "theme-green":
-			return "color(display-p3 0.30 1.70 0.30)"
+			return "color(display-p3 0.25 1.10 0.25)"
 		case "theme-cyan":
 			return "color(display-p3 0.22 1.30 1.90)"
 		default: // amber
@@ -35,7 +35,7 @@ func (e *Engine) crtColor() string {
 	}
 	switch theme {
 	case "theme-green":
-		return "color(display-p3 0.50 1.00 0.50)"
+		return "color(display-p3 0.42 0.90 0.42)"
 	case "theme-cyan":
 		return "color(display-p3 0.48 0.92 1.00)"
 	default:
@@ -48,7 +48,7 @@ func (e *Engine) glowColor() string {
 	if e.hdrMode() {
 		switch theme {
 		case "theme-green":
-			return "color(display-p3 0.00 2.20 0.00)"
+			return "color(display-p3 0.00 1.40 0.00)"
 		case "theme-cyan":
 			return "color(display-p3 0.00 1.40 2.50)"
 		default: // amber
@@ -57,7 +57,7 @@ func (e *Engine) glowColor() string {
 	}
 	switch theme {
 	case "theme-green":
-		return "color(display-p3 0.10 1.00 0.10)"
+		return "color(display-p3 0.08 0.88 0.08)"
 	case "theme-cyan":
 		return "color(display-p3 0.00 0.82 1.00)"
 	default:
@@ -140,6 +140,7 @@ func (e *Engine) Render() {
 		return
 	}
 	e.renderHeader()
+	e.renderCharacter()
 	e.renderBoard()
 	e.renderSidebar()
 	e.renderShip(0, boardY+ROWS*CELL+shipGap, canvasW, shipViewH, e.heelAnim, true)

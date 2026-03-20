@@ -35,16 +35,16 @@
   --water-line: rgba(193, 119, 42, 0.22);
 }
 .theme-green {
-  --crt-fg:   #9cff9c;
-  --crt-dim:  #3f6b3f;
-  --crt-glow: rgba(156,255,156,0.38);
-  --crt-bg:   #090c09;
-  --muted-copy: #749274;
-  --soft-copy: #98b398;
-  --accent-copy: #b5d39a;
-  --panel-border: rgba(88, 143, 88, 0.28);
-  --panel-border-strong: rgba(156, 255, 156, 0.40);
-  --water-line: rgba(94, 182, 122, 0.24);
+  --crt-fg:   #78e878;
+  --crt-dim:  #3a6030;
+  --crt-glow: rgba(120,232,120,0.30);
+  --crt-bg:   #080a08;
+  --muted-copy: #688a68;
+  --soft-copy: #8aac8a;
+  --accent-copy: #a0c48a;
+  --panel-border: rgba(80, 130, 80, 0.24);
+  --panel-border-strong: rgba(120, 220, 120, 0.32);
+  --water-line: rgba(80, 160, 100, 0.20);
 }
 .theme-cyan {
   --crt-fg:   #8feaff;
@@ -183,8 +183,8 @@ body {
 canvas {
   display: block;
   image-rendering: pixelated;
-  width: min(calc(99vw - 28px), calc(93vh * 562 / 740), 562px);
-  aspect-ratio: 562 / 740;
+  width: min(calc(99vw - 28px), calc(93vh * 822 / 740), 822px);
+  aspect-ratio: 822 / 740;
   height: auto;
 }
 
@@ -819,8 +819,8 @@ canvas {
   --crt-scanline: rgba(255, 210, 80, 0.04);
 }
 .hdr-mode.theme-green {
-  --crt-glow: rgba(156,255,156,0.74);
-  --crt-scanline: rgba(156,255,156,0.04);
+  --crt-glow: rgba(120,232,120,0.44);
+  --crt-scanline: rgba(120,232,120,0.03);
 }
 .hdr-mode.theme-cyan  {
   --crt-glow: rgba(143,234,255,0.78);
@@ -922,6 +922,6 @@ canvas {
   }
 
   canvas {
-    width: min(100vw - 24px, calc(100vh * 562 / 740));
+    width: min(100vw - 24px, calc(100vh * 822 / 740));
   }
 }

@@ -5,6 +5,8 @@ package main
 import "math"
 
 func (e *Engine) Update(dt float64) {
+	e.char.update(dt, e)
+
 	if e.state != StatePlaying {
 		return
 	}

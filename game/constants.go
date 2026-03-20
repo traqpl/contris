@@ -9,15 +9,17 @@ const (
 	CELL   = 36.0
 	CENTER = float64(COLS-1) / 2.0
 
-	boardX = 0.0
+	charPanelW = 260.0 // left panel for the mascot character (2x scale)
+
+	boardX = charPanelW
 	boardY = 44.0
-	sideX  = COLS*CELL + 10
+	sideX  = charPanelW + COLS*CELL + 10
 	sideW  = 264.0
 
 	shipGap   = 32.0
 	shipViewH = 88.0
 
-	canvasW = COLS*CELL + 10 + sideW                   // 298 + 264 = 562
+	canvasW = charPanelW + COLS*CELL + 10 + sideW      // 260 + 298 + 264 = 822
 	canvasH = ROWS*CELL + boardY + shipGap + shipViewH // 576 + 44 + 32 + 88 = 740
 
 	RedLimit             = 9.0 // seconds in red zone before ship sinks
@@ -33,14 +35,16 @@ type levelConfig struct {
 	DropSpeed  float64 // base drop interval (lower = faster)
 	GreenZone  float64 // heel half-width for green (safe) zone
 	YellowZone float64 // heel half-width for yellow (warning) zone
+	ReefCount  int     // fixed number of reef pieces per level
+	HazCount   int     // fixed number of haz pieces per level
 }
 
 var levelConfigs = [MaxLevel]levelConfig{
-	{Duration: 120, DropSpeed: 0.70, GreenZone: 0.28, YellowZone: 0.48},
-	{Duration: 96, DropSpeed: 0.42, GreenZone: 0.18, YellowZone: 0.34},
-	{Duration: 78, DropSpeed: 0.31, GreenZone: 0.13, YellowZone: 0.27},
-	{Duration: 64, DropSpeed: 0.23, GreenZone: 0.10, YellowZone: 0.22},
-	{Duration: 54, DropSpeed: 0.17, GreenZone: 0.07, YellowZone: 0.17},
+	{Duration: 120, DropSpeed: 0.70, GreenZone: 0.28, YellowZone: 0.48, ReefCount: 2, HazCount: 3},
+	{Duration: 96, DropSpeed: 0.42, GreenZone: 0.18, YellowZone: 0.34, ReefCount: 3, HazCount: 4},
+	{Duration: 78, DropSpeed: 0.31, GreenZone: 0.13, YellowZone: 0.27, ReefCount: 4, HazCount: 5},
+	{Duration: 64, DropSpeed: 0.23, GreenZone: 0.10, YellowZone: 0.22, ReefCount: 4, HazCount: 6},
+	{Duration: 54, DropSpeed: 0.17, GreenZone: 0.07, YellowZone: 0.17, ReefCount: 5, HazCount: 7},
 }
 
 func levelDuration(level int) float64 {

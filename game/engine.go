@@ -101,6 +101,10 @@ type Engine struct {
 	levelEndPending bool
 	levelPieceCount int
 	lastSpawnCo     string
+	lastShapeLabel  string // for anti-repeat: label of last spawned piece
+
+	specialSchedule []scheduledSpecial // pre-planned reef/haz timing
+	specialIdx      int                // next unserved entry in schedule
 
 	curHeel  float64
 	heelAnim float64
@@ -119,6 +123,7 @@ type Engine struct {
 
 	completedShipLayers int
 
+	char Character
 	keys map[string]bool
 }
 
@@ -217,10 +222,12 @@ func (e *Engine) newGame() {
 	e.levelEndPending = false
 	e.levelPieceCount = 0
 	e.lastSpawnCo = ""
+	e.lastShapeLabel = ""
 	e.levelSumm = nil
 	e.retryPrompt = ""
 	e.gameOverReason = GameOverReasonNone
 	e.completedShipLayers = 0
+	e.char = newCharacter()
 
 	e.flash = nil
 	e.explosions = nil
@@ -229,6 +236,7 @@ func (e *Engine) newGame() {
 	e.state = StatePlaying
 	e.lastResultPending = false
 
+	e.generateSpecialSchedule()
 	e.next = e.drawNextPiece()
 	e.spawn()
 }
@@ -264,6 +272,7 @@ func (e *Engine) nextLevel() {
 	e.levelEndPending = false
 	e.levelPieceCount = 0
 	e.lastSpawnCo = ""
+	e.lastShapeLabel = ""
 	e.levelSumm = nil
 	e.retryPrompt = ""
 	e.gameOverReason = GameOverReasonNone
@@ -273,6 +282,7 @@ func (e *Engine) nextLevel() {
 	e.comboTime = 0
 
 	e.state = StatePlaying
+	e.generateSpecialSchedule()
 	e.next = e.drawNextPiece()
 	e.spawn()
 }
@@ -289,6 +299,7 @@ func (e *Engine) spawn() {
 	}
 	e.levelPieceCount++
 	e.lastSpawnCo = d.Co
+	e.lastShapeLabel = d.Label
 	e.next = e.drawNextPiece()
 	if !e.canFit(0, e.cur.C, e.cur.Shape) {
 		e.gameOverReason = GameOverReasonHoldFull
@@ -297,26 +308,80 @@ func (e *Engine) spawn() {
 }
 
 func (e *Engine) drawNextPiece() PieceDef {
-	d := randDef(e.level)
-	if e.level != 1 {
-		return d
-	}
-	if e.levelPieceCount >= 3 {
-		return d
-	}
-	if e.lastSpawnCo == "" {
-		return d
-	}
-	// Level 1 opening should not start with special-cargo streaks.
-	if (e.lastSpawnCo == "reef" || e.lastSpawnCo == "haz") && d.Co == e.lastSpawnCo {
-		for i := 0; i < 6; i++ {
-			alt := randDef(e.level)
-			if alt.Co != e.lastSpawnCo {
-				return alt
-			}
+	// Check if a scheduled special cargo piece is due
+	if e.specialIdx < len(e.specialSchedule) {
+		dur := levelDuration(e.level)
+		frac := 0.0
+		if dur > 0 {
+			frac = e.levelTimer / dur
+		}
+		sched := e.specialSchedule[e.specialIdx]
+		if e.levelEndPending || frac >= sched.Fraction {
+			e.specialIdx++
+			return makeSpecialPiece(sched.Co)
 		}
 	}
-	return d
+
+	// Normal piece with anti-repeat on shape label
+	for i := 0; i < 5; i++ {
+		d := randNormalDef()
+		if d.Label != e.lastShapeLabel {
+			return d
+		}
+	}
+	return randNormalDef()
+}
+
+// generateSpecialSchedule creates the pre-planned timing for reef/haz pieces.
+// Uses stratified sampling: the level timeline is divided into equal segments
+// and one special piece is placed randomly within each segment.
+func (e *Engine) generateSpecialSchedule() {
+	e.specialSchedule = nil
+	e.specialIdx = 0
+
+	if e.level < 1 || e.level > MaxLevel {
+		return
+	}
+	cfg := levelConfigs[e.level-1]
+	total := cfg.ReefCount + cfg.HazCount
+	if total == 0 {
+		return
+	}
+
+	// Shuffled list of types
+	types := make([]string, 0, total)
+	for i := 0; i < cfg.ReefCount; i++ {
+		types = append(types, "reef")
+	}
+	for i := 0; i < cfg.HazCount; i++ {
+		types = append(types, "haz")
+	}
+	rand.Shuffle(len(types), func(i, j int) {
+		types[i], types[j] = types[j], types[i]
+	})
+
+	// Stratified placement across level duration
+	e.specialSchedule = make([]scheduledSpecial, total)
+	for i, co := range types {
+		segStart := float64(i) / float64(total)
+		segEnd := float64(i+1) / float64(total)
+		margin := (segEnd - segStart) * 0.12
+		frac := segStart + margin + rand.Float64()*(segEnd-segStart-2*margin)
+		if frac < 0.05 {
+			frac = 0.05
+		}
+		if frac > 0.94 {
+			frac = 0.94
+		}
+		e.specialSchedule[i] = scheduledSpecial{Fraction: frac, Co: co}
+	}
+
+	// Insertion sort by fraction (N is small)
+	for i := 1; i < len(e.specialSchedule); i++ {
+		for j := i; j > 0 && e.specialSchedule[j].Fraction < e.specialSchedule[j-1].Fraction; j-- {
+			e.specialSchedule[j], e.specialSchedule[j-1] = e.specialSchedule[j-1], e.specialSchedule[j]
+		}
+	}
 }
 
 func randomReplayPrompt() string {

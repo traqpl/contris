@@ -89,44 +89,48 @@ func init() {
 	}
 }
 
-func pieceWeightForLevel(d PieceDef, level int) int {
-	switch d.Co {
-	case "reef":
-		switch {
-		case level <= 1:
-			return 2
-		case level <= 3:
-			return 3
-		default:
-			return 4
-		}
-	case "haz":
-		switch {
-		case level <= 1:
-			return 3
-		case level <= 3:
-			return 3
-		default:
-			return 4
-		}
-	default:
-		return d.W
-	}
+// scheduledSpecial represents a pre-planned special cargo piece.
+type scheduledSpecial struct {
+	Fraction float64 // when during the level (0.0–1.0)
+	Co       string  // "reef" or "haz"
 }
 
-func randDef(level int) PieceDef {
+// randNormalDef draws a random normal piece (excludes reef and haz).
+func randNormalDef() PieceDef {
 	total := 0
 	for _, d := range pool {
-		total += pieceWeightForLevel(d, level)
+		if d.Co == "reef" || d.Co == "haz" {
+			continue
+		}
+		total += d.W
 	}
 	n := rand.Intn(total)
 	for _, d := range pool {
-		n -= pieceWeightForLevel(d, level)
+		if d.Co == "reef" || d.Co == "haz" {
+			continue
+		}
+		n -= d.W
 		if n < 0 {
 			return newDef(d)
 		}
 	}
 	return newDef(pool[0])
+}
+
+// makeSpecialPiece creates a reef or haz PieceDef.
+func makeSpecialPiece(co string) PieceDef {
+	if co == "reef" {
+		return newDef(PieceDef{
+			Shape: copyShape(baseShapes["tu2"]),
+			Co:    "reef",
+			Label: "REEFER 2TU",
+		})
+	}
+	return newDef(PieceDef{
+		Shape: []Vec2{{0, 0}},
+		Co:    "haz",
+		Label: "HAZMAT",
+	})
 }
 
 func newDef(d PieceDef) PieceDef {
