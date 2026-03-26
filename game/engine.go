@@ -75,8 +75,9 @@ type ExplosionFx struct {
 }
 
 type Engine struct {
-	canvas js.Value
-	ctx    js.Value
+	canvas    js.Value
+	ctx       js.Value
+	hapagLogo js.Value // Hapag-Lloyd logo image, cached from window.hapagLloydLogo
 
 	state GameState
 
