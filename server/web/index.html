@@ -4,10 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CARGO SHIFT</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&family=VT323&display=swap" rel="stylesheet">
+<link rel="preload" href="explode.mp3" as="audio" type="audio/mpeg">
+<link rel="preload" href="glass-knock.mp3" as="audio" type="audio/mpeg">
+<link rel="preload" href="metal-hit.mp3" as="audio" type="audio/mpeg">
 <link rel="preload" href="menu.mp3" as="audio" type="audio/mpeg" crossorigin>
 <link rel="preload" href="music.ogg" as="audio" type="audio/ogg" crossorigin>
 <link rel="preload" href="music_2.ogg" as="audio" type="audio/ogg" crossorigin>
@@ -24,7 +28,8 @@
   <div class="toolbar">
     <span class="toolbar-title">◈ CARGO SHIFT</span>
     <div class="toolbar-controls">
-      <button id="muteBtn" class="mute-btn" title="Mute / Unmute music">♫</button>
+      <button id="muteBtn" class="mute-btn" title="Mute / Unmute music (M)">♫</button>
+      <button id="sfxMuteBtn" class="mute-btn" title="Mute / Unmute sound effects (S)">♪</button>
       <label for="themeSelect" class="toolbar-label">THEME</label>
       <select id="themeSelect" class="theme-select">
         <option value="theme-amber" selected>AMBER</option>
@@ -62,6 +67,7 @@
           <button id="openHallBtn" class="menu-secondary-btn" type="button">Hall of Fame</button>
         </div>
         <p class="menu-hint" id="menuHint">Arrows move cargo. Up rotates. Down drops.</p>
+        <p class="menu-credits"><span id="appVersion"></span></p>
       </section>
 
       <div class="menu-strip" aria-hidden="true">
@@ -75,7 +81,8 @@
         <span><strong>Up</strong> rotate</span>
         <span><strong>Down</strong> drop</span>
         <span><strong>P / Esc</strong> pause</span>
-        <span><strong>M</strong> mute</span>
+        <span><strong>M</strong> music</span>
+        <span><strong>S</strong> sfx</span>
         <span><strong>T</strong> theme</span>
         <span><strong>H</strong> hall</span>
       </div>
@@ -141,8 +148,11 @@
   const bgMusicA = document.getElementById('bgMusicA');
   const bgMusicB = document.getElementById('bgMusicB');
   const muteBtn = document.getElementById('muteBtn');
-  const menuMusicVolume = 0.82;
-  const gameplayMusicVolume = 0.07;
+  const sfxMuteBtn = document.getElementById('sfxMuteBtn');
+  const menuMusicVolume = 0.22;
+  const gameplayMusicVolume = 0.18;
+  const gameplaySfxVolume = 0.18;
+  const menuUiSfxVolume = 0.14;
   window.cargoShiftScene = window.cargoShiftScene || 'menu';
   const crossfadeSeconds = 4.8;
 
@@ -163,6 +173,7 @@
   let musicStarted = false;
   let playbackQueue = [];
   let muted = false;
+  let sfxMuted = false;
   let activePlayer = bgMusicA;
   let standbyPlayer = bgMusicB;
   let activeTrackUrl = '';
@@ -237,6 +248,11 @@
     });
     muteBtn.textContent = muted ? '♫̸' : '♫';
     muteBtn.classList.toggle('muted', muted);
+  }
+
+  function applySfxMuteState() {
+    sfxMuteBtn.textContent = sfxMuted ? '♪̸' : '♪';
+    sfxMuteBtn.classList.toggle('muted', sfxMuted);
   }
 
   function swapPlayers() {
@@ -428,7 +444,8 @@
     }
     syncCrossfade(dt);
     syncGameplayQueue();
-    window.requestAnimationFrame(syncAudioState);
+    // Use setTimeout instead of rAF so audio keeps syncing in background tabs.
+    setTimeout(() => syncAudioState(performance.now()), 100);
   }
 
   try {
@@ -446,20 +463,43 @@
       if (activeScene() !== 'game' || fadeState || audio !== activePlayer) {
         return;
       }
-      const fallbackIndex = nextPreparedTrack ? nextPreparedTrack.index : nextTrackIndex();
-      loadGameplayTrack(fallbackIndex);
+      if (nextPreparedTrack && standbyPlayer.readyState >= 2) {
+        // Standby already has next track buffered — swap instantly, no gap.
+        currentTrack = nextPreparedTrack.index;
+        const np = nextPreparedTrack;
+        nextPreparedTrack = null;
+        stopPlayer(activePlayer);
+        swapPlayers();
+        activePlayer.currentTime = 0;
+        activeTrackUrl = np.url;
+        activeTrackKind = np.kind;
+        playAudio(activePlayer, desiredMusicVolume());
+        queueGameplayTrack(nextTrackIndex());
+      } else {
+        // Standby not ready yet — ensure it's queued; canplay handler will start it.
+        if (!nextPreparedTrack) {
+          queueGameplayTrack(nextTrackIndex());
+        }
+        stopPlayer(activePlayer);
+      }
     });
     audio.addEventListener('canplay', () => {
-      if (
-        activeScene() === 'game'
-        && !fadeState
-        && activeTrackKind === 'gameplay'
-        && nextPreparedTrack
-        && audio === standbyPlayer
-        && Number.isFinite(activePlayer.duration)
-        && activePlayer.duration > 0
-        && activePlayer.duration-activePlayer.currentTime <= crossfadeSeconds
-      ) {
+      if (activeScene() !== 'game' || fadeState || audio !== standbyPlayer || !nextPreparedTrack || activeTrackKind !== 'gameplay') {
+        return;
+      }
+      if (activePlayer.paused) {
+        // Active track already ended/stopped — start standby immediately, no reload gap.
+        currentTrack = nextPreparedTrack.index;
+        const np = nextPreparedTrack;
+        nextPreparedTrack = null;
+        stopPlayer(activePlayer);
+        swapPlayers();
+        activePlayer.currentTime = 0;
+        activeTrackUrl = np.url;
+        activeTrackKind = np.kind;
+        playAudio(activePlayer, desiredMusicVolume());
+        queueGameplayTrack(nextTrackIndex());
+      } else if (Number.isFinite(activePlayer.duration) && activePlayer.duration > 0 && activePlayer.duration - activePlayer.currentTime <= crossfadeSeconds) {
         currentTrack = nextPreparedTrack.index;
         beginCrossfade(nextPreparedTrack.url, nextPreparedTrack.kind, { loop: false });
       }
@@ -477,6 +517,58 @@
 
   startMusic();
 
+  // ── sound effects ─────────────────────────────────────────────────────────
+  const explodeSfx = new Audio('explode.mp3');
+  explodeSfx.preload = 'auto';
+  const glassKnockSfx = new Audio('glass-knock.mp3');
+  glassKnockSfx.preload = 'auto';
+  const metalHitSfx = new Audio('metal-hit.mp3');
+  metalHitSfx.preload = 'auto';
+
+  function playSfx(audio, volume = gameplaySfxVolume) {
+    if (sfxMuted) return;
+    const sfx = audio.cloneNode();
+    sfx.volume = volume;
+    sfx.play().catch(() => {});
+  }
+
+  function playEchoSfx(audio, {
+    volume = gameplaySfxVolume,
+    echoes = [],
+  } = {}) {
+    playSfx(audio, volume);
+    echoes.forEach(({ delayMs, gain }) => {
+      window.setTimeout(() => {
+        if (sfxMuted) return;
+        playSfx(audio, volume * gain);
+      }, delayMs);
+    });
+  }
+
+  window.playExplodeSound = function () {
+    playEchoSfx(explodeSfx, {
+      volume: gameplaySfxVolume,
+      echoes: [
+        { delayMs: 120, gain: 0.45 },
+        { delayMs: 240, gain: 0.22 },
+      ],
+    });
+  };
+
+  window.playMenuKnockSound = function () {
+    playSfx(glassKnockSfx, menuUiSfxVolume);
+  };
+
+  window.playMetalHitSound = function () {
+    playEchoSfx(metalHitSfx, {
+      volume: gameplaySfxVolume,
+      echoes: [
+        { delayMs: 90, gain: 0.35 },
+        { delayMs: 180, gain: 0.16 },
+      ],
+    });
+  };
+
   function onFirstInteraction() {
     startMusic();
     if (musicStarted) {
@@ -488,22 +580,38 @@
   document.addEventListener('keydown', onFirstInteraction);
   document.addEventListener('click', onFirstInteraction);
   document.addEventListener('touchstart', onFirstInteraction);
+  document.addEventListener('mousemove', onFirstInteraction, { once: true });
 
   function toggleMute() {
     muted = !muted;
     applyMuteState();
   }
 
+  function toggleSfxMute() {
+    sfxMuted = !sfxMuted;
+    applySfxMuteState();
+  }
+
   applyMuteState();
+  applySfxMuteState();
 
   muteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleMute();
   });
 
+  sfxMuteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSfxMute();
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyM') {
       toggleMute();
+      e.preventDefault();
+    }
+    if (e.code === 'KeyS') {
+      toggleSfxMute();
       e.preventDefault();
     }
   });
@@ -548,12 +656,17 @@
   }
 
   function setMenuScreenMode(mode) {
-    menuScreenMode = mode === 'hall' ? 'hall' : 'main';
+    const nextMode = mode === 'hall' ? 'hall' : 'main';
+    if (menuScreenMode === nextMode) {
+      return false;
+    }
+    menuScreenMode = nextMode;
     menuMainPanel.hidden = menuScreenMode !== 'main';
     menuHallPanel.hidden = menuScreenMode !== 'hall';
     try {
       window.localStorage.setItem(hallScreenStorageKey, menuScreenMode);
     } catch (_) {}
+    return true;
   }
 
   function escapeHtml(value) {
@@ -617,6 +730,7 @@
 
   themeSelect.addEventListener('change', () => {
     applyTheme(themeSelect.value);
+    window.playMenuKnockSound();
   });
   applyTheme('theme-amber');
 
@@ -624,6 +738,7 @@
     const idx = (themes.indexOf(themeSelect.value) + 1) % themes.length;
     themeSelect.value = themes[idx];
     applyTheme(themes[idx]);
+    window.playMenuKnockSound();
   }
 
   document.addEventListener('keydown', (e) => {
@@ -654,8 +769,24 @@
     }
     dispatchGameKey('Space');
   });
-  openHallBtn.addEventListener('click', () => setMenuScreenMode('hall'));
-  backToMenuBtn.addEventListener('click', () => setMenuScreenMode('main'));
+  openHallBtn.addEventListener('click', () => {
+    if (setMenuScreenMode('hall')) {
+      window.playMenuKnockSound();
+    }
+  });
+  backToMenuBtn.addEventListener('click', () => {
+    if (setMenuScreenMode('main')) {
+      window.playMenuKnockSound();
+    }
+  });
+
+  [startShiftBtn, openHallBtn, backToMenuBtn, muteBtn, sfxMuteBtn, themeSelect].forEach((el) => {
+    el.addEventListener('mouseenter', () => {
+      if (monitor.classList.contains('in-menu') && scoreModal.hidden) {
+        window.playMenuKnockSound();
+      }
+    });
+  });
 
   function closeScoreModal(nextScreen = null) {
     scoreModal.hidden = true;
@@ -908,11 +1039,15 @@
       return;
     }
     if (event.code === 'KeyH') {
-      setMenuScreenMode(menuScreenMode === 'hall' ? 'main' : 'hall');
+      if (setMenuScreenMode(menuScreenMode === 'hall' ? 'main' : 'hall')) {
+        window.playMenuKnockSound();
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
     } else if ((event.code === 'Escape' || event.code === 'Enter') && menuScreenMode === 'hall') {
-      setMenuScreenMode('main');
+      if (setMenuScreenMode('main')) {
+        window.playMenuKnockSound();
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
     }
@@ -947,10 +1082,6 @@
 
   syncViewState();
 </script>
-<script>
-  window.hapagLloydLogo = new Image();
-  window.hapagLloydLogo.src = 'hl-mark.svg';
-</script>
 <script src="wasm_exec.js"></script>
 <script>
   const go = new Go();
@@ -967,6 +1098,13 @@
       menuHint.textContent = 'The game runtime did not start. Open the console for details.';
       document.getElementById('loading').textContent = 'ERROR: ' + err.message;
     });
+</script>
+<script>
+  fetch('/api/version').then(r => r.json()).then(d => {
+    window.appVersion = d.version;
+    const el = document.getElementById('appVersion');
+    if (el) el.textContent = 'version: ' + d.version;
+  }).catch(() => {});
 </script>
 </body>
 </html>

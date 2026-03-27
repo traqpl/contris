@@ -30,6 +30,7 @@ func (e *Engine) registerInput() {
 			case "Space":
 				switch e.state {
 				case StateMainMenu:
+					js.Global().Call("playMenuKnockSound")
 					e.newGame()
 				case StatePlaying:
 					e.hardDrop()
@@ -43,6 +44,7 @@ func (e *Engine) registerInput() {
 			case "Enter":
 				switch e.state {
 				case StateMainMenu:
+					js.Global().Call("playMenuKnockSound")
 					e.newGame()
 				case StateLevelEnd:
 					e.nextLevel()

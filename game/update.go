@@ -2,10 +2,14 @@
 
 package main
 
-import "math"
+import (
+	"math"
+	"syscall/js"
+)
 
 func (e *Engine) Update(dt float64) {
 	e.char.update(dt, e)
+	e.captain.update(dt, e)
 
 	if e.state != StatePlaying {
 		return
@@ -144,6 +148,7 @@ func (e *Engine) lock() {
 			T:     2.2,
 		}
 	}
+	js.Global().Call("playMetalHitSound")
 	e.processBoard()
 	if e.levelEndPending {
 		e.levelSumm = &LevelSummary{
@@ -349,6 +354,7 @@ func (e *Engine) activateHaz() bool {
 				for _, pos := range grp {
 					rows[pos[0]] = true
 				}
+				penalty := HazExplosionPenalty * len(rows)
 				for row := range rows {
 					e.explosions = append(e.explosions, ExplosionFx{
 						X:   boardX + float64(COLS)*CELL/2,
@@ -360,12 +366,13 @@ func (e *Engine) activateHaz() bool {
 				for row := range rows {
 					e.grid[row] = [COLS]*Cell{}
 				}
-				e.score = max0(e.score - 50)
+				e.score = max0(e.score - penalty)
 				e.flash = &FlashMsg{
-					Text:  "⚠  EXPLOSION  −50 pts",
+					Text:  "⚠  EXPLOSION  -" + itoa(penalty) + " pts",
 					Color: "#ff8822",
 					T:     2.2,
 				}
+				js.Global().Call("playExplodeSound")
 				any = true
 			}
 		}

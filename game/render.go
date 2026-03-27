@@ -140,6 +140,7 @@ func (e *Engine) Render() {
 		return
 	}
 	e.renderHeader()
+	e.renderCaptain()
 	e.renderCharacter()
 	e.renderBoard()
 	e.renderSidebar()
@@ -156,6 +157,20 @@ func (e *Engine) Render() {
 	if e.state == StateVictory {
 		e.renderVictory()
 	}
+	e.renderVersion()
+}
+
+func (e *Engine) renderVersion() {
+	v := js.Global().Get("appVersion")
+	if v.IsUndefined() || v.IsNull() {
+		return
+	}
+	e.noGlow()
+	e.ctx.Set("fillStyle", "#2a3e50")
+	e.ctx.Set("font", fmt.Sprintf("500 10px %s", uiFontBody))
+	e.ctx.Set("textAlign", "right")
+	e.ctx.Set("textBaseline", "alphabetic")
+	e.ctx.Call("fillText", "version: "+v.String(), canvasW-4, canvasH-4)
 }
 
 func (e *Engine) renderMainMenu() {
@@ -417,45 +432,6 @@ func (e *Engine) renderBoard() {
 			e.drawCell(boardX+float64(c)*CELL, boardY+float64(r)*CELL, CELL, cell.Co, 1.0, cell.RibH, e.rowFrozenTime(r) > 0)
 		}
 	}
-	// Logo na ustawionych pomarańczowych klockach (raz na klocek, po Pid)
-	seenOrange := map[int]bool{}
-	for r := 0; r < ROWS; r++ {
-		for c := 0; c < COLS; c++ {
-			cell := e.grid[r][c]
-			if cell == nil || cell.Co != "orange" || seenOrange[cell.Pid] {
-				continue
-			}
-			seenOrange[cell.Pid] = true
-			minR2, minC2, maxR2, maxC2 := ROWS, COLS, -1, -1
-			sumX2, sumY2, cnt2 := 0.0, 0.0, 0
-			for rr := 0; rr < ROWS; rr++ {
-				for cc := 0; cc < COLS; cc++ {
-					o := e.grid[rr][cc]
-					if o == nil || o.Pid != cell.Pid {
-						continue
-					}
-					if rr < minR2 {
-						minR2 = rr
-					}
-					if cc < minC2 {
-						minC2 = cc
-					}
-					if rr > maxR2 {
-						maxR2 = rr
-					}
-					if cc > maxC2 {
-						maxC2 = cc
-					}
-					sumX2 += boardX + float64(cc)*CELL + CELL/2
-					sumY2 += boardY + float64(rr)*CELL + CELL/2
-					cnt2++
-				}
-			}
-			pw := float64(maxC2-minC2+1) * CELL
-			ph := float64(maxR2-minR2+1) * CELL
-			e.drawPieceLogo(sumX2/float64(cnt2), sumY2/float64(cnt2), pw, ph, 1.0, cell.RibH)
-		}
-	}
 
 	seenReefer := map[int]bool{}
 	for r := 0; r < ROWS; r++ {
@@ -590,18 +566,6 @@ func (e *Engine) renderBoard() {
 		e.drawReeferOverlayRect(ax, ay, aw, ah, 1.0, frozen)
 	}
 
-	// Logo aktywnego klocka — centroid komórek
-	if e.cur.Co == "orange" {
-		_, _, aw, ah := reeferBounds(e.cur.Shape, e.cur.R, e.cur.C, CELL, boardX, boardY)
-		cx2, cy2 := 0.0, 0.0
-		for _, v := range e.cur.Shape {
-			cx2 += boardX + float64(e.cur.C+v.C)*CELL + CELL/2
-			cy2 += boardY + float64(e.cur.R+v.R)*CELL + CELL/2
-		}
-		n := float64(len(e.cur.Shape))
-		e.drawPieceLogo(cx2/n, cy2/n, aw, ah, 1.0, curRibH)
-	}
-
 	// Active piece outline
 	e.drawShapeOutline(e.cur.Shape, e.cur.R, e.cur.C, "rgba(255,255,255,0.7)", 1.5)
 
@@ -703,29 +667,6 @@ func (e *Engine) drawCell(x, y, sz float64, co string, alpha float64, ribH, froz
 		e.ctx.Call("stroke")
 	}
 
-	e.ctx.Call("restore")
-}
-
-// drawPieceLogo rysuje logo Hapag-Lloyd raz na środku klocka.
-// cx, cy – środek bounding boxu klocka w pikselach kanwy.
-// bboxW, bboxH – wymiary bounding boxu; ribH – czy klocek stoi pionowo.
-func (e *Engine) drawPieceLogo(cx, cy, bboxW, bboxH, alpha float64, ribH bool) {
-	if e.hapagLogo.IsUndefined() || e.hapagLogo.IsNull() {
-		e.hapagLogo = js.Global().Get("hapagLloydLogo")
-	}
-	if e.hapagLogo.IsUndefined() || e.hapagLogo.IsNull() ||
-		!e.hapagLogo.Get("complete").Bool() ||
-		e.hapagLogo.Get("naturalWidth").Int() <= 0 {
-		return
-	}
-	// Znak HL musi mieścić się w jednej komórce — cap do CELL*0.72
-	markSize := math.Min(math.Min(bboxH, bboxW)*0.70, CELL*0.72)
-
-	e.ctx.Call("save")
-	if alpha < 1 {
-		e.ctx.Set("globalAlpha", alpha)
-	}
-	e.ctx.Call("drawImage", e.hapagLogo, cx-markSize/2, cy-markSize/2, markSize, markSize)
 	e.ctx.Call("restore")
 }
 
@@ -928,16 +869,6 @@ func (e *Engine) renderSidebar() {
 			}
 			e.ctx.Call("stroke")
 		}
-		if e.next.Co == "orange" {
-			_, _, nw, nh2 := reeferBounds(e.next.Shape, 0, 0, s, ox, oy)
-			ncx, ncy := 0.0, 0.0
-			for _, v := range e.next.Shape {
-				ncx += ox + float64(v.C)*s + s/2
-				ncy += oy + float64(v.R)*s + s/2
-			}
-			nn := float64(len(e.next.Shape))
-			e.drawPieceLogo(ncx/nn, ncy/nn, nw, nh2, 1.0, nextRibH)
-		}
 	}
 	y += 70
 
@@ -975,7 +906,15 @@ func (e *Engine) renderSidebar() {
 	} else if remaining < 60 {
 		timerColor = "#dd8844"
 	}
-	statRow("TIME LEFT", timerStr, timerColor)
+	// TIME LEFT uses plain text — no phosphor glow, digits stay crisp.
+	e.ctx.Set("fillStyle", dim)
+	e.text("TIME LEFT", x+6, y+17, 16, "left")
+	e.ctx.Set("fillStyle", timerColor)
+	e.ctx.Set("textAlign", "right")
+	e.ctx.Set("textBaseline", "alphabetic")
+	e.ctx.Set("font", fmt.Sprintf("%s %.0fpx %s", "600", 22.0, uiFontDisplay))
+	e.ctx.Call("fillText", timerStr, x+sideW-6, y+17)
+	y += 26
 
 	if e.comboText != "" && e.comboTime > 0 {
 		alpha := math.Min(1.0, e.comboTime)
@@ -1025,7 +964,7 @@ func (e *Engine) renderSidebar() {
 		{left: "GREEN clear", right: "200"},
 		{left: "YELLOW clear", right: "100"},
 		{left: "RED no clear", right: ""},
-		{left: "DG pair boom", right: "-50", icon: "haz"},
+		{left: "DG pair boom", right: "-300/row", icon: "haz"},
 		{left: "REEFER freeze", right: "20s", icon: "reef"},
 	}
 	shortcuts := []struct{ key, action string }{

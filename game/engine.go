@@ -75,9 +75,8 @@ type ExplosionFx struct {
 }
 
 type Engine struct {
-	canvas    js.Value
-	ctx       js.Value
-	hapagLogo js.Value // Hapag-Lloyd logo image, cached from window.hapagLloydLogo
+	canvas js.Value
+	ctx    js.Value
 
 	state GameState
 
@@ -124,8 +123,9 @@ type Engine struct {
 
 	completedShipLayers int
 
-	char Character
-	keys map[string]bool
+	char    Character
+	captain Captain
+	keys    map[string]bool
 }
 
 func (e *Engine) audioScene() string {
@@ -181,7 +181,7 @@ func (e *Engine) enterMainMenu() {
 	score := 0
 	lines := 0
 	level := 0
-	if (e.state == StateGameOver || e.state == StateVictory) && (e.score > 0 || e.lines > 0) {
+	if (e.state == StateGameOver || e.state == StateVictory || e.state == StatePlaying || e.state == StatePaused) && (e.score > 0 || e.lines > 0) {
 		pending = true
 		score = e.score
 		lines = e.lines
@@ -229,6 +229,7 @@ func (e *Engine) newGame() {
 	e.gameOverReason = GameOverReasonNone
 	e.completedShipLayers = 0
 	e.char = newCharacter()
+	e.captain = newCaptain()
 
 	e.flash = nil
 	e.explosions = nil

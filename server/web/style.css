@@ -438,6 +438,14 @@ canvas {
   text-align: center;
 }
 
+.menu-credits {
+  margin-top: clamp(6px, 0.8vh, 10px);
+  color: var(--muted-copy);
+  font-size: 11px;
+  text-align: center;
+  opacity: 0.6;
+}
+
 .menu-actions {
   margin-top: 16px;
   display: flex;

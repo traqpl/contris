@@ -23,7 +23,24 @@ var nickRe = regexp.MustCompile(`^[A-Za-z0-9]{3}$`)
 const maxScoreLevel = 5
 
 func main() {
-	store = NewScoreStore(os.Getenv("DB_PATH"))
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		resp, err := http.Get("http://localhost:" + port + "/health")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "scores.db"
+	}
+
+	store = NewScoreStore(dbPath)
 
 	// Ensure .wasm gets correct MIME type (some systems lack it)
 	_ = mime.AddExtensionType(".wasm", "application/wasm")
@@ -40,6 +57,17 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	version := os.Getenv("GIT_TAG")
+	if version == "" {
+		version = "dev"
+	}
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"` + version + `"}`))
+	})
 	mux.HandleFunc("/api/scores", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 )
 
 // ── mood types ────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ type Character struct {
 	AnimTime      float64 // master clock for animations
 	BlinkCD       float64 // countdown to next blink toggle
 	Blinking      bool
+	LookX         float64 // smoothed horizontal gaze offset (tracks ship heel)
 	PrevScore     int
 	PrevLines     int
 	PrevLevel     int
@@ -215,6 +217,14 @@ func (c *Character) update(dt float64, e *Engine) {
 		}
 	}
 
+	// LookX tracks ship heel — positive heel → head tilts/turns right
+	if e.state == StatePlaying {
+		target := math.Max(-8, math.Min(8, e.curHeel*40.0))
+		c.LookX += (target - c.LookX) * math.Min(dt*5, 1)
+	} else {
+		c.LookX *= math.Max(0, 1-dt*3)
+	}
+
 	c.PrevScore = e.score
 	c.PrevLines = e.lines
 	c.PrevLevel = e.level
@@ -294,8 +304,8 @@ func (e *Engine) renderCharacter() {
 	const charScale = 2.0
 
 	cx := charPanelW / 2.0
-	// Position: moved higher so she's centered in the board area
-	drawBaseY := boardY + float64(ROWS)*CELL*0.58
+	// Position: keep MIKU lower so her bubble can sit between her and AOP.
+	drawBaseY := boardY + float64(ROWS)*CELL*0.84
 	charMidY := drawBaseY - 65.0
 
 	// ── anime-style motion layers ─────────────────────────────────────────
@@ -334,6 +344,9 @@ func (e *Engine) renderCharacter() {
 		sway = math.Sin(t*0.9) * 2.0
 		headTilt = math.Sin(t*0.9+0.3) * 0.05
 	}
+
+	// Heel tracking: head tilts and turns toward the imbalance side
+	headTilt += c.LookX * 0.045
 
 	y := drawBaseY + bob
 
@@ -450,7 +463,7 @@ func (e *Engine) renderCharacter() {
 
 	// ── head (tilts gently with sway) ────────────────────────────────────
 	headR := 24.0 * s
-	headCx := cx + sway*0.7
+	headCx := cx + sway*0.7 + c.LookX*1.6
 	headY := bodyTop - headR + 6*s - breathe*0.5
 
 	ctx.Call("save")
@@ -551,7 +564,7 @@ func (e *Engine) renderCharacter() {
 			ctx.Call("arc", eyeCx+eyeSpread+3, tearY, 2, 0, math.Pi*2)
 			ctx.Call("fill")
 		case MoodComfort:
-			e.drawNormalEyes(eyeCx, eyeY, eyeSpread, s)
+			e.drawNormalEyes(eyeCx, eyeY, eyeSpread, s, c.LookX*0.7)
 			ctx.Set("strokeStyle", "#2a1830")
 			ctx.Set("lineWidth", 1.8)
 			ctx.Call("beginPath")
@@ -594,7 +607,7 @@ func (e *Engine) renderCharacter() {
 			ctx.Call("quadraticCurveTo", eyeCx+headR-4, sweatY+8, eyeCx+headR-2, sweatY)
 			ctx.Call("fill")
 		case MoodWorried:
-			e.drawNormalEyes(eyeCx, eyeY, eyeSpread, s)
+			e.drawNormalEyes(eyeCx, eyeY, eyeSpread, s, c.LookX*0.7)
 			ctx.Set("strokeStyle", "#2a1830")
 			ctx.Set("lineWidth", 2)
 			ctx.Call("beginPath")
@@ -604,7 +617,7 @@ func (e *Engine) renderCharacter() {
 			ctx.Call("lineTo", eyeCx+eyeSpread-4, eyeY-7)
 			ctx.Call("stroke")
 		default:
-			e.drawNormalEyes(eyeCx, eyeY, eyeSpread, s)
+			e.drawNormalEyes(eyeCx, eyeY, eyeSpread, s, c.LookX*0.7)
 		}
 	}
 
@@ -704,14 +717,12 @@ func (e *Engine) renderCharacter() {
 
 	ctx.Call("restore") // restore hat/head tilt
 
-	// ── name badge ────────────────────────────────────────────────────────
-	ctx.Set("fillStyle", "rgba(255,255,255,0.75)")
-	ctx.Call("fillRect", bodyCx-12, bodyTop+bodyH*0.15, 24, 10)
-	ctx.Set("fillStyle", "#1a3a5a")
-	ctx.Set("font", fmt.Sprintf("600 7px %s", uiFontBody))
+	// ── name on vest (embroidered look — no background rect) ─────────────
+	ctx.Set("fillStyle", "rgba(255,255,255,0.72)")
+	ctx.Set("font", fmt.Sprintf("700 6px %s", uiFontBody))
 	ctx.Set("textAlign", "center")
 	ctx.Set("textBaseline", "middle")
-	ctx.Call("fillText", "MIKU", bodyCx, bodyTop+bodyH*0.15+5.5)
+	ctx.Call("fillText", "MIKU", bodyCx, bodyTop+bodyH*0.38)
 
 	ctx.Call("restore")
 
@@ -724,16 +735,21 @@ func (e *Engine) renderCharacter() {
 		if c.BubbleDur-c.BubbleTime < 0.3 {
 			alpha = (c.BubbleDur - c.BubbleTime) / 0.3
 		}
-		// hat top in screen space: charMidY - 130 + 2*bob
-		scaledHatTop := charMidY - 65*charScale + charScale*bob
-		e.drawSpeechBubble(cx, scaledHatTop-64, c.BubbleText, alpha)
+		// Anchor the bubble to MIKU's current head/helmet position so it tracks her pose.
+		screenHeadX := cx + charScale*(headCx-cx)
+		screenHatTop := charMidY + charScale*((hatY-hatR)-charMidY)
+		bubbleCx := screenHeadX + c.LookX*1.4 + math.Sin(c.AnimTime*0.9)*5.0
+		bubbleTop := screenHatTop - 76.0
+		e.drawSpeechBubble(bubbleCx, bubbleTop, c.BubbleText, alpha)
 	}
 }
 
 // drawNormalEyes draws standard anime eyes with iris and highlight.
-func (e *Engine) drawNormalEyes(cx, eyeY, spread, s float64) {
+func (e *Engine) drawNormalEyes(cx, eyeY, spread, s, lx float64) {
 	ctx := e.ctx
 	eyeR := 6.0 * s
+	// clamp pupil offset so iris stays inside the white
+	lx = math.Max(-eyeR*0.35, math.Min(eyeR*0.35, lx))
 
 	for _, side := range []float64{-1, 1} {
 		ex := cx + side*spread
@@ -742,22 +758,22 @@ func (e *Engine) drawNormalEyes(cx, eyeY, spread, s float64) {
 		ctx.Call("beginPath")
 		ctx.Call("arc", ex, eyeY, eyeR, 0, math.Pi*2)
 		ctx.Call("fill")
-		// iris
+		// iris (offset by lx)
 		ctx.Set("fillStyle", "#4a2a8a")
 		ctx.Call("beginPath")
-		ctx.Call("arc", ex, eyeY+1, eyeR*0.65, 0, math.Pi*2)
+		ctx.Call("arc", ex+lx, eyeY+1, eyeR*0.65, 0, math.Pi*2)
 		ctx.Call("fill")
-		// pupil
+		// pupil (offset by lx)
 		ctx.Set("fillStyle", "#1a1020")
 		ctx.Call("beginPath")
-		ctx.Call("arc", ex, eyeY+1.5, eyeR*0.35, 0, math.Pi*2)
+		ctx.Call("arc", ex+lx, eyeY+1.5, eyeR*0.35, 0, math.Pi*2)
 		ctx.Call("fill")
-		// highlight
+		// highlight (follows iris)
 		ctx.Set("fillStyle", "#ffffff")
 		ctx.Call("beginPath")
-		ctx.Call("arc", ex+2, eyeY-1.5, 2.5*s, 0, math.Pi*2)
+		ctx.Call("arc", ex+lx+2, eyeY-1.5, 2.5*s, 0, math.Pi*2)
 		ctx.Call("fill")
-		// outline
+		// outline (fixed — white of eye doesn't move)
 		ctx.Set("strokeStyle", "#2a1830")
 		ctx.Set("lineWidth", 1.5)
 		ctx.Call("beginPath")
@@ -803,6 +819,79 @@ func (e *Engine) drawHeart(x, y, size float64, color string) {
 	ctx.Call("restore")
 }
 
+// drawSpeechBubbleBelow draws a speech bubble BELOW the anchor point, tail pointing up.
+// Used for MIKU so her bubble appears below her feet and doesn't overlap AOP.
+func (e *Engine) drawSpeechBubbleBelow(cx, tailTipY float64, text string, alpha float64) {
+	ctx := e.ctx
+	ctx.Call("save")
+	ctx.Set("globalAlpha", alpha)
+
+	bubW := math.Min(charPanelW-20.0, 220.0)
+	lines := e.bubbleLines(text, bubW-26, 14)
+	lineHeight := 16.0
+	textBlockH := float64(len(lines)) * lineHeight
+	bubH := math.Max(50.0, textBlockH+22.0)
+	tailH := 12.0
+	bx := cx - bubW/2
+	by := math.Min(tailTipY+tailH, canvasH-bubH-8.0) // bubble body top
+	radius := 10.0
+
+	// bubble body
+	ctx.Set("fillStyle", "rgba(255,255,255,0.92)")
+	ctx.Call("beginPath")
+	ctx.Call("moveTo", bx+radius, by)
+	ctx.Call("lineTo", bx+bubW-radius, by)
+	ctx.Call("quadraticCurveTo", bx+bubW, by, bx+bubW, by+radius)
+	ctx.Call("lineTo", bx+bubW, by+bubH-radius)
+	ctx.Call("quadraticCurveTo", bx+bubW, by+bubH, bx+bubW-radius, by+bubH)
+	ctx.Call("lineTo", bx+radius, by+bubH)
+	ctx.Call("quadraticCurveTo", bx, by+bubH, bx, by+bubH-radius)
+	ctx.Call("lineTo", bx, by+radius)
+	ctx.Call("quadraticCurveTo", bx, by, bx+radius, by)
+	ctx.Call("closePath")
+	ctx.Call("fill")
+
+	// tail triangle pointing UP
+	ctx.Set("fillStyle", "rgba(255,255,255,0.92)")
+	ctx.Call("beginPath")
+	ctx.Call("moveTo", cx-8, by)
+	ctx.Call("lineTo", cx, tailTipY)
+	ctx.Call("lineTo", cx+8, by)
+	ctx.Call("closePath")
+	ctx.Call("fill")
+
+	// border
+	ctx.Set("strokeStyle", "rgba(60,40,80,0.4)")
+	ctx.Set("lineWidth", 1.5)
+	ctx.Call("beginPath")
+	ctx.Call("moveTo", cx-8, by)
+	ctx.Call("lineTo", cx, tailTipY)
+	ctx.Call("lineTo", cx+8, by)
+	ctx.Call("lineTo", bx+bubW-radius, by)
+	ctx.Call("quadraticCurveTo", bx+bubW, by, bx+bubW, by+radius)
+	ctx.Call("lineTo", bx+bubW, by+bubH-radius)
+	ctx.Call("quadraticCurveTo", bx+bubW, by+bubH, bx+bubW-radius, by+bubH)
+	ctx.Call("lineTo", bx+radius, by+bubH)
+	ctx.Call("quadraticCurveTo", bx, by+bubH, bx, by+bubH-radius)
+	ctx.Call("lineTo", bx, by+radius)
+	ctx.Call("quadraticCurveTo", bx, by, bx+radius, by)
+	ctx.Call("closePath")
+	ctx.Call("stroke")
+
+	// text
+	ctx.Set("fillStyle", "#2a1830")
+	ctx.Set("font", fmt.Sprintf("600 14px %s", uiFontBody))
+	ctx.Set("textAlign", "center")
+	ctx.Set("textBaseline", "middle")
+	textY := by + bubH/2 - (float64(len(lines)-1)*lineHeight)/2
+	for _, line := range lines {
+		ctx.Call("fillText", line, cx, textY)
+		textY += lineHeight
+	}
+
+	ctx.Call("restore")
+}
+
 // drawSpeechBubble draws a comic-style speech bubble above the character.
 func (e *Engine) drawSpeechBubble(cx, topY float64, text string, alpha float64) {
 	ctx := e.ctx
@@ -810,9 +899,12 @@ func (e *Engine) drawSpeechBubble(cx, topY float64, text string, alpha float64) 
 	ctx.Set("globalAlpha", alpha)
 
 	bubW := math.Min(charPanelW-20.0, 220.0)
-	bubH := 50.0
+	lines := e.bubbleLines(text, bubW-26, 14)
+	lineHeight := 16.0
+	textBlockH := float64(len(lines)) * lineHeight
+	bubH := math.Max(50.0, textBlockH+22.0)
 	bx := cx - bubW/2
-	by := topY
+	by := math.Max(8.0, topY)
 	radius := 10.0
 
 	// bubble body - rounded rect
@@ -863,7 +955,31 @@ func (e *Engine) drawSpeechBubble(cx, topY float64, text string, alpha float64) 
 	ctx.Set("font", fmt.Sprintf("600 14px %s", uiFontBody))
 	ctx.Set("textAlign", "center")
 	ctx.Set("textBaseline", "middle")
-	ctx.Call("fillText", text, cx, by+bubH/2)
+	textY := by + bubH/2 - (float64(len(lines)-1)*lineHeight)/2
+	for _, line := range lines {
+		ctx.Call("fillText", line, cx, textY)
+		textY += lineHeight
+	}
 
 	ctx.Call("restore")
+}
+
+func (e *Engine) bubbleLines(text string, maxWidth, size float64) []string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{text}
+	}
+
+	e.ctx.Set("font", fmt.Sprintf("600 %.0fpx %s", size, uiFontBody))
+	lines := []string{words[0]}
+	for _, word := range words[1:] {
+		last := lines[len(lines)-1]
+		candidate := last + " " + word
+		if e.ctx.Call("measureText", candidate).Get("width").Float() <= maxWidth {
+			lines[len(lines)-1] = candidate
+			continue
+		}
+		lines = append(lines, word)
+	}
+	return lines
 }

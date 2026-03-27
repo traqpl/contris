@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Container body -->
+  <rect x="2" y="8" width="28" height="16" fill="#E86010"/>
+
+  <!-- Top rail -->
+  <rect x="2" y="8" width="28" height="2.5" fill="#8C3000"/>
+  <!-- Bottom rail -->
+  <rect x="2" y="21.5" width="28" height="2.5" fill="#8C3000"/>
+
+  <!-- Left end panel -->
+  <rect x="2" y="10.5" width="2.5" height="11" fill="#C04C14"/>
+  <!-- Right end panel -->
+  <rect x="27.5" y="10.5" width="2.5" height="11" fill="#C04C14"/>
+
+  <!-- Corrugation ribs (shadow + highlight pairs) -->
+  <rect x="7"    y="10.5" width="1"   height="11" fill="#B03A08"/>
+  <rect x="8"    y="10.5" width="0.5" height="11" fill="#F08040"/>
+  <rect x="11"   y="10.5" width="1"   height="11" fill="#B03A08"/>
+  <rect x="12"   y="10.5" width="0.5" height="11" fill="#F08040"/>
+  <rect x="15"   y="10.5" width="1"   height="11" fill="#B03A08"/>
+  <rect x="16"   y="10.5" width="0.5" height="11" fill="#F08040"/>
+  <rect x="19"   y="10.5" width="1"   height="11" fill="#B03A08"/>
+  <rect x="20"   y="10.5" width="0.5" height="11" fill="#F08040"/>
+  <rect x="23"   y="10.5" width="1"   height="11" fill="#B03A08"/>
+  <rect x="24"   y="10.5" width="0.5" height="11" fill="#F08040"/>
+
+  <!-- Corner castings (ISO fittings) -->
+  <rect x="2"  y="8"    width="3" height="2.5" fill="#5C1400" rx="0.3"/>
+  <rect x="27" y="8"    width="3" height="2.5" fill="#5C1400" rx="0.3"/>
+  <rect x="2"  y="21.5" width="3" height="2.5" fill="#5C1400" rx="0.3"/>
+  <rect x="27" y="21.5" width="3" height="2.5" fill="#5C1400" rx="0.3"/>
+</svg>
