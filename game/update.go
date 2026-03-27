@@ -281,6 +281,9 @@ func (e *Engine) clearRows() int {
 	heel := e.gridHeel()
 	cleared, totalPts := 0, 0
 
+	// HAZ cells from non-bottom rows survive clearing and fall down
+	var hazDropCols []int
+
 	for r := ROWS - 1; r >= 0; r-- {
 		res := e.evalRow(r, heel)
 		if res == nil {
@@ -292,10 +295,30 @@ func (e *Engine) clearRows() int {
 		e.lines++
 		cleared++
 
+		// Collect HAZ cells that should survive (not in last row)
+		if r < ROWS-1 {
+			for c := 0; c < COLS; c++ {
+				if e.grid[r][c] != nil && e.grid[r][c].Co == "haz" {
+					hazDropCols = append(hazDropCols, c)
+				}
+			}
+		}
+
 		// Remove row, prepend empty
 		copy(e.grid[1:r+1], e.grid[0:r])
 		e.grid[0] = [COLS]*Cell{}
 		r++ // re-check same index
+	}
+
+	// Re-drop surviving HAZ cells to lowest free position in their column
+	for _, c := range hazDropCols {
+		for r := ROWS - 1; r >= 0; r-- {
+			if e.grid[r][c] == nil {
+				e.pidCount++
+				e.grid[r][c] = &Cell{Co: "haz", Pid: e.pidCount}
+				break
+			}
+		}
 	}
 
 	if cleared > 0 {
