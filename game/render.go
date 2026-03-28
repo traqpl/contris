@@ -183,7 +183,7 @@ func (e *Engine) renderMainMenu() {
 	e.crispGlow("CARGO SHIFT", canvasW/2, 30, 28, "center", color)
 	e.ctx.Set("fillStyle", soft)
 	e.noGlow()
-	e.text("stack smart · keep trim · load all five decks", canvasW/2, 54, 14, "center")
+	e.text("stack smart · keep trim · load all eight decks", canvasW/2, 54, 14, "center")
 
 	panelX := 26.0
 	panelY := 76.0
@@ -265,7 +265,7 @@ func (e *Engine) renderMainMenu() {
 	e.ctx.Set("fillStyle", accent)
 	e.text("GOAL", rightX, rightY, 15, "left")
 	rightY += 22
-	rightY = e.wrappedText("Complete five levels to fully load the ship.", rightX, rightY, colW, 13, 17, "left", soft)
+	rightY = e.wrappedText("Complete eight levels to fully load the ship.", rightX, rightY, colW, 13, 17, "left", soft)
 	e.wrappedText("One level completed = one sealed deck.", rightX, rightY, colW, 13, 17, "left", soft)
 
 	e.ctx.Set("fillStyle", "#314656")
@@ -1316,10 +1316,10 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 		lowerRangeH := hullD - lowerTopY
 		upperRangeH := lowerTopY - fillTopY
 		holdFillH := 0.0
-		if e.completedShipLayers <= 3 {
-			holdFillH = lowerRangeH * float64(e.completedShipLayers) / 3.0
+		if e.completedShipLayers <= 5 {
+			holdFillH = lowerRangeH * float64(e.completedShipLayers) / 5.0
 		} else {
-			holdFillH = lowerRangeH + upperRangeH*float64(e.completedShipLayers-3)/2.0
+			holdFillH = lowerRangeH + upperRangeH*float64(e.completedShipLayers-5)/3.0
 		}
 		drawSegment(holdLeft, holdRight, holdCount, "center", hullD, holdFillH)
 	}

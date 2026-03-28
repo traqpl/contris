@@ -20,7 +20,7 @@ var webFS embed.FS
 var store *ScoreStore
 var nickRe = regexp.MustCompile(`^[A-Za-z0-9]{3}$`)
 
-const maxScoreLevel = 5
+const maxScoreLevel = 8
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {

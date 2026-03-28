@@ -27,7 +27,7 @@ const (
 	TrimReferenceCells   = float64(COLS)
 	HazExplosionPenalty  = 300
 
-	MaxLevel = 5
+	MaxLevel = 8
 )
 
 // levelConfig defines per-level difficulty parameters.
@@ -46,6 +46,9 @@ var levelConfigs = [MaxLevel]levelConfig{
 	{Duration: 120, DropSpeed: 0.58, GreenZone: 0.25, YellowZone: 0.42, ReefCount: 2, HazCount: 14},
 	{Duration: 105, DropSpeed: 0.46, GreenZone: 0.20, YellowZone: 0.36, ReefCount: 3, HazCount: 13},
 	{Duration: 90, DropSpeed: 0.36, GreenZone: 0.16, YellowZone: 0.30, ReefCount: 3, HazCount: 16},
+	{Duration: 80, DropSpeed: 0.30, GreenZone: 0.13, YellowZone: 0.26, ReefCount: 4, HazCount: 18},
+	{Duration: 70, DropSpeed: 0.25, GreenZone: 0.10, YellowZone: 0.22, ReefCount: 4, HazCount: 20},
+	{Duration: 60, DropSpeed: 0.20, GreenZone: 0.08, YellowZone: 0.18, ReefCount: 5, HazCount: 22},
 }
 
 func levelDuration(level int) float64 {
