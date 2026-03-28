@@ -1309,19 +1309,19 @@ func (e *Engine) renderShip(x, y, w, h, heel float64, showHUD bool) {
 		holdCount = 1
 	}
 
-	// ── Ukończone levele: ładunek rośnie od dna kadłuba ───────────────────
+	// ── Ukończone levele: 8 równomiernych warstw od dna kadłuba ──────────
 	if e.completedShipLayers > 0 {
 		fillTopY := math.Min(bridgeY+bh*0.34, fy+fh*0.26)
-		lowerTopY := math.Max(bridgeY+bh*0.58, fy+fh*0.58)
-		lowerRangeH := hullD - lowerTopY
-		upperRangeH := lowerTopY - fillTopY
-		holdFillH := 0.0
-		if e.completedShipLayers <= 5 {
-			holdFillH = lowerRangeH * float64(e.completedShipLayers) / 5.0
-		} else {
-			holdFillH = lowerRangeH + upperRangeH*float64(e.completedShipLayers-5)/3.0
+		totalRangeH := hullD - fillTopY
+		tierGap := 1.5
+		tierH := (totalRangeH - tierGap*float64(MaxLevel-1)) / float64(MaxLevel)
+		if tierH < 2 {
+			tierH = 2
 		}
-		drawSegment(holdLeft, holdRight, holdCount, "center", hullD, holdFillH)
+		for tier := 0; tier < e.completedShipLayers && tier < MaxLevel; tier++ {
+			tierBaseY := hullD - float64(tier)*(tierH+tierGap)
+			drawSegment(holdLeft, holdRight, holdCount, "center", tierBaseY, tierH)
+		}
 	}
 
 	// ── Nadbudówka 1: mostek ──────────────────────────────────────────────

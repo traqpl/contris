@@ -41,14 +41,14 @@ type levelConfig struct {
 }
 
 var levelConfigs = [MaxLevel]levelConfig{
-	{Duration: 150, DropSpeed: 0.85, GreenZone: 0.35, YellowZone: 0.55, ReefCount: 1, HazCount: 10},
-	{Duration: 140, DropSpeed: 0.72, GreenZone: 0.30, YellowZone: 0.50, ReefCount: 2, HazCount: 12},
-	{Duration: 120, DropSpeed: 0.58, GreenZone: 0.25, YellowZone: 0.42, ReefCount: 2, HazCount: 14},
-	{Duration: 105, DropSpeed: 0.46, GreenZone: 0.20, YellowZone: 0.36, ReefCount: 3, HazCount: 13},
-	{Duration: 90, DropSpeed: 0.36, GreenZone: 0.16, YellowZone: 0.30, ReefCount: 3, HazCount: 16},
-	{Duration: 80, DropSpeed: 0.30, GreenZone: 0.13, YellowZone: 0.26, ReefCount: 4, HazCount: 18},
-	{Duration: 70, DropSpeed: 0.25, GreenZone: 0.10, YellowZone: 0.22, ReefCount: 4, HazCount: 20},
-	{Duration: 60, DropSpeed: 0.20, GreenZone: 0.08, YellowZone: 0.18, ReefCount: 5, HazCount: 22},
+	{Duration: 150, DropSpeed: 0.85, GreenZone: 0.35, YellowZone: 0.55, ReefCount: 1, HazCount: 8},
+	{Duration: 140, DropSpeed: 0.72, GreenZone: 0.30, YellowZone: 0.50, ReefCount: 2, HazCount: 9},
+	{Duration: 120, DropSpeed: 0.58, GreenZone: 0.25, YellowZone: 0.42, ReefCount: 2, HazCount: 10},
+	{Duration: 105, DropSpeed: 0.46, GreenZone: 0.20, YellowZone: 0.36, ReefCount: 3, HazCount: 10},
+	{Duration: 90, DropSpeed: 0.36, GreenZone: 0.16, YellowZone: 0.30, ReefCount: 3, HazCount: 11},
+	{Duration: 80, DropSpeed: 0.30, GreenZone: 0.13, YellowZone: 0.26, ReefCount: 4, HazCount: 12},
+	{Duration: 70, DropSpeed: 0.25, GreenZone: 0.10, YellowZone: 0.22, ReefCount: 4, HazCount: 13},
+	{Duration: 60, DropSpeed: 0.20, GreenZone: 0.08, YellowZone: 0.18, ReefCount: 5, HazCount: 14},
 }
 
 func levelDuration(level int) float64 {
