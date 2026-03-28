@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, games]
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
