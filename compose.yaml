@@ -1,0 +1,15 @@
+services:
+  contris:
+    image: ${IMAGE_NAME:-contris:latest}
+    container_name: contris
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8072}:8072"
+    environment:
+      PORT: "8072"
+      DB_PATH: /data/contris_scores.db
+    volumes:
+      - contris-data:/data
+
+volumes:
+  contris-data:

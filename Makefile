@@ -1,8 +1,10 @@
-.PHONY: all wasm wasm-exec server dev build clean
+.PHONY: all wasm wasm-exec server dev build deploy-agent clean
 
-WASM_OUT = server/web/game.wasm
-BINARY   = contris
-URL      = http://localhost:8070
+WASM_OUT     = server/web/game.wasm
+BINARY       = contris
+URL          = http://localhost:8070
+PORT        ?= 8072
+DOCKER_IMAGE ?= contris:latest
 
 ifeq ($(shell uname -s),Darwin)
 BROWSER_OPEN = open
@@ -33,6 +35,13 @@ dev: wasm kill-port
 
 build: wasm
 	go build -ldflags="-s -w" -o $(BINARY) ./server/
+
+deploy-agent:
+	DEPLOY_DIR="$${DEPLOY_DIR:-$$HOME/contris}"; \
+	mkdir -p "$$DEPLOY_DIR" && \
+	docker build -t $(DOCKER_IMAGE) . && \
+	cp compose.yaml "$$DEPLOY_DIR/compose.yaml" && \
+	IMAGE_NAME=$(DOCKER_IMAGE) PORT=$(PORT) docker compose -f "$$DEPLOY_DIR/compose.yaml" up -d --force-recreate --remove-orphans
 
 clean:
 	rm -f $(WASM_OUT) $(BINARY) server/web/wasm_exec.js

@@ -1,0 +1,9 @@
+.git
+.github
+.idea
+.claude
+.DS_Store
+contris
+scores.db
+server/web/game.wasm
+server/web/wasm_exec.js
