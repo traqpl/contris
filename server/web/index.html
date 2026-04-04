@@ -563,7 +563,17 @@
     try {
       sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
     } catch (_) { return; }
-    sfxCtx.resume();
+    // iOS requires scheduling actual audio playback (src.start) within the
+    // user gesture call stack — resume() alone is not sufficient to unlock.
+    try {
+      const silence = sfxCtx.createBuffer(1, 1, 22050);
+      const silenceSrc = sfxCtx.createBufferSource();
+      silenceSrc.buffer = silence;
+      silenceSrc.connect(sfxCtx.destination);
+      silenceSrc.start(0);
+      silenceSrc.addEventListener('ended', () => silenceSrc.disconnect(), { once: true });
+    } catch (_) {}
+    await sfxCtx.resume();
     const files = { metalHit: 'metal-hit.mp3', explode: 'explode.mp3', glassKnock: 'glass-knock.mp3' };
     await Promise.all(Object.entries(files).map(async ([key, url]) => {
       try {
