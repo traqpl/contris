@@ -57,11 +57,15 @@ func (e *Engine) registerTouchInput() {
 		e.touchStartX = t.Get("clientX").Float()
 		e.touchStartY = t.Get("clientY").Float()
 		e.touchStartMs = js.Global().Get("performance").Call("now").Float()
+		e.touchCancelLongPress()
 		e.touchSwipeCols = 0
 		e.touchSwiped = false
 		e.touchLongPressTriggered = false
 
 		e.touchLongPressTimer = js.Global().Call("setTimeout", js.FuncOf(func(_ js.Value, _ []js.Value) any {
+			if e.touchLongPressTriggered {
+				return nil
+			}
 			e.touchLongPressTriggered = true
 			e.touchLongPressTimer = js.Undefined()
 			e.touchHandleLongPress()
