@@ -128,14 +128,13 @@ type Engine struct {
 	keys    map[string]bool
 
 	// Touch input state
-	touchStartX    float64
-	touchStartY    float64
-	touchStartMs   float64
-	touchLastTapMs float64
-	touchLastTapX  float64
-	touchLastTapY  float64
-	touchSwipeCols int
-	touchIsDouble  bool
+	touchStartX             float64
+	touchStartY             float64
+	touchStartMs            float64
+	touchSwipeCols          int
+	touchSwiped             bool
+	touchLongPressTimer     js.Value
+	touchLongPressTriggered bool
 }
 
 func (e *Engine) audioScene() string {

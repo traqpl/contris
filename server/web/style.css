@@ -903,6 +903,12 @@ canvas {
   display: none;
 }
 
+.is-touch .menu-title {
+  text-shadow:
+    0 0 6px var(--crt-glow),
+    0 0 14px var(--crt-glow);
+}
+
 @media (max-width: 920px) {
   .monitor {
     min-height: 0;

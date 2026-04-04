@@ -4,14 +4,31 @@ package main
 
 import "syscall/js"
 
-func (e *Engine) touchHandleAction(isDouble bool) {
+func (e *Engine) touchCancelLongPress() {
+	js.Global().Call("clearTimeout", e.touchLongPressTimer)
+	e.touchLongPressTimer = js.Undefined()
+}
+
+func (e *Engine) touchHandleTap() {
 	switch e.state {
 	case StatePlaying:
-		if isDouble {
-			e.hardDrop()
-		} else {
-			e.rotPiece()
-		}
+		e.rotPiece()
+	case StateMainMenu:
+		js.Global().Call("playMenuKnockSound")
+		e.newGame()
+	case StateGameOver, StateVictory:
+		e.enterMainMenu()
+	case StateLevelEnd:
+		e.nextLevel()
+	case StatePaused:
+		e.state = StatePlaying
+	}
+}
+
+func (e *Engine) touchHandleLongPress() {
+	switch e.state {
+	case StatePlaying:
+		e.hardDrop()
 	case StateMainMenu:
 		js.Global().Call("playMenuKnockSound")
 		e.newGame()
@@ -25,6 +42,7 @@ func (e *Engine) touchHandleAction(isDouble bool) {
 }
 
 func (e *Engine) registerTouchInput() {
+	e.touchLongPressTimer = js.Undefined()
 	opts := js.Global().Get("Object").New()
 	opts.Set("passive", false)
 
@@ -36,43 +54,49 @@ func (e *Engine) registerTouchInput() {
 			return nil
 		}
 		t := touches.Index(0)
-		x := t.Get("clientX").Float()
-		y := t.Get("clientY").Float()
-		now := js.Global().Get("performance").Call("now").Float()
+		e.touchStartX = t.Get("clientX").Float()
+		e.touchStartY = t.Get("clientY").Float()
+		e.touchStartMs = js.Global().Get("performance").Call("now").Float()
+		e.touchSwipeCols = 0
+		e.touchSwiped = false
+		e.touchLongPressTriggered = false
 
-		dx := x - e.touchLastTapX
-		if dx < 0 {
-			dx = -dx
-		}
-		dy := y - e.touchLastTapY
-		if dy < 0 {
-			dy = -dy
-		}
-		if now-e.touchLastTapMs < 300 && dx < 60 && dy < 60 {
-			e.touchIsDouble = true
-			e.touchHandleAction(true)
-		} else {
-			e.touchIsDouble = false
-			e.touchStartX = x
-			e.touchStartY = y
-			e.touchStartMs = now
-			e.touchSwipeCols = 0
-		}
+		e.touchLongPressTimer = js.Global().Call("setTimeout", js.FuncOf(func(_ js.Value, _ []js.Value) any {
+			e.touchLongPressTriggered = true
+			e.touchLongPressTimer = js.Undefined()
+			e.touchHandleLongPress()
+			return nil
+		}), 400)
 		return nil
 	})
 
 	onTouchMove := js.FuncOf(func(_ js.Value, args []js.Value) any {
 		ev := args[0]
 		ev.Call("preventDefault")
-		if e.touchIsDouble || e.state != StatePlaying {
-			return nil
-		}
 		touches := ev.Get("changedTouches")
 		if touches.Length() == 0 {
 			return nil
 		}
 		t := touches.Index(0)
 		x := t.Get("clientX").Float()
+		y := t.Get("clientY").Float()
+
+		adx := x - e.touchStartX
+		if adx < 0 {
+			adx = -adx
+		}
+		ady := y - e.touchStartY
+		if ady < 0 {
+			ady = -ady
+		}
+		// Cancel long press on any significant movement
+		if adx > 10 || ady > 10 {
+			e.touchCancelLongPress()
+		}
+
+		if e.state != StatePlaying || e.touchLongPressTriggered {
+			return nil
+		}
 
 		rect := e.canvas.Call("getBoundingClientRect")
 		renderedW := rect.Get("width").Float()
@@ -84,10 +108,12 @@ func (e *Engine) registerTouchInput() {
 		targetCols := int(dxLogical / CELL)
 		diff := targetCols - e.touchSwipeCols
 		if diff > 0 {
+			e.touchSwiped = true
 			for i := 0; i < diff; i++ {
 				e.moveH(1)
 			}
 		} else if diff < 0 {
+			e.touchSwiped = true
 			for i := 0; i < -diff; i++ {
 				e.moveH(-1)
 			}
@@ -99,10 +125,12 @@ func (e *Engine) registerTouchInput() {
 	onTouchEnd := js.FuncOf(func(_ js.Value, args []js.Value) any {
 		ev := args[0]
 		ev.Call("preventDefault")
-		if e.touchIsDouble {
-			e.touchIsDouble = false
+		e.touchCancelLongPress()
+
+		if e.touchLongPressTriggered || e.touchSwiped {
 			return nil
 		}
+
 		touches := ev.Get("changedTouches")
 		if touches.Length() == 0 {
 			return nil
@@ -120,13 +148,8 @@ func (e *Engine) registerTouchInput() {
 		if dy < 0 {
 			dy = -dy
 		}
-		duration := now - e.touchStartMs
-
-		if dx < 20 && dy < 20 && duration < 300 {
-			e.touchLastTapMs = now
-			e.touchLastTapX = x
-			e.touchLastTapY = y
-			e.touchHandleAction(false)
+		if dx < 20 && dy < 20 && now-e.touchStartMs < 300 {
+			e.touchHandleTap()
 		}
 		return nil
 	})
