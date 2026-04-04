@@ -577,9 +577,10 @@
   };
 
   window.playMetalHitSound = function () {
+    const mobile = navigator.maxTouchPoints > 0;
     playEchoSfx(metalHitSfx, {
       volume: gameplaySfxVolume,
-      echoes: [
+      echoes: mobile ? [] : [
         { delayMs: 90, gain: 0.35 },
         { delayMs: 180, gain: 0.16 },
       ],
