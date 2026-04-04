@@ -523,8 +523,7 @@ func (e *Engine) renderBoard() {
 	for e.canFit(gr+1, e.cur.C, e.cur.Shape) {
 		gr++
 	}
-	curH, curW := shapeDims(e.cur.Shape)
-	curRibH := curH > curW
+	curRibH := false
 	if gr != e.cur.R {
 		for _, v := range e.cur.Shape {
 			e.drawCell(
@@ -831,7 +830,7 @@ func (e *Engine) renderSidebar() {
 		s = math.Min(s, 30)
 		ox := x + (sideW-float64(nw)*s)/2
 		oy := y + (68-float64(nh)*s)/2
-		nextRibH := nh > nw
+		nextRibH := false; _ = nh > nw
 		for _, v := range e.next.Shape {
 			e.drawCell(ox+float64(v.C)*s, oy+float64(v.R)*s, s, e.next.Co, 1.0, nextRibH, false)
 		}

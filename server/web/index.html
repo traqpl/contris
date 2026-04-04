@@ -538,18 +538,39 @@
   let sfxCtx = null;
   const sfxBufs = {};
 
+  function decodeAudioData(ctx, arrayBuffer) {
+    return new Promise((resolve, reject) => {
+      try {
+        const result = ctx.decodeAudioData(arrayBuffer,
+          (buf) => resolve(buf),
+          (err) => reject(err)
+        );
+        if (result && typeof result.then === 'function') {
+          result.then(resolve, reject);
+        }
+      } catch (e) { reject(e); }
+    });
+  }
+
   async function initSfxContext() {
     if (sfxCtx) return;
-    sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (_) { return; }
+    sfxCtx.resume();
     const files = { metalHit: 'metal-hit.mp3', explode: 'explode.mp3', glassKnock: 'glass-knock.mp3' };
     await Promise.all(Object.entries(files).map(async ([key, url]) => {
       try {
         const res = await fetch(url);
         const buf = await res.arrayBuffer();
-        sfxBufs[key] = await sfxCtx.decodeAudioData(buf);
+        sfxBufs[key] = await decodeAudioData(sfxCtx, buf);
       } catch (_) {}
     }));
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && sfxCtx && sfxCtx.state === 'suspended') sfxCtx.resume();
+  });
 
   function playBuf(buf, volume, echoes = []) {
     if (sfxMuted || !sfxCtx || !buf) return;

@@ -126,8 +126,7 @@ func (e *Engine) hardDrop() {
 func (e *Engine) lock() {
 	pid := e.pidCount + 1
 	e.pidCount++
-	h, w := shapeDims(e.cur.Shape)
-	ribH := h > w // więcej wierszy niż kolumn → kontener pionowy → żebra poziome
+	ribH := false
 	freezeRows := map[int]bool{}
 	for _, v := range e.cur.Shape {
 		r, c := e.cur.R+v.R, e.cur.C+v.C
