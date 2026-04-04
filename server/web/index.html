@@ -123,6 +123,7 @@
   <div class="canvas-wrap">
     <canvas id="gameCanvas" width="822" height="740"></canvas>
     <div id="loading">LOADING...</div>
+    <button id="pauseBtn" class="pause-btn" type="button" hidden aria-label="Pause / Resume">⏸</button>
   </div>
 
   <div class="footer">CARGO SHIFT &nbsp;·&nbsp; 2026</div>
@@ -636,11 +637,14 @@
   const backToMenuBtn = document.getElementById('backToMenuBtn');
   const startShiftCopy = document.getElementById('startShiftCopy');
   const menuHint = document.getElementById('menuHint');
+  const pauseBtn = document.getElementById('pauseBtn');
   const isTouchDevice = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
   if (isTouchDevice) {
     document.body.classList.add('is-touch');
     monitor.classList.add('is-touch');
   }
+
+  pauseBtn.addEventListener('click', () => dispatchGameKey('KeyP'));
   const menuShipCanvas = document.getElementById('menuShipCanvas');
   const menuShipCtx = menuShipCanvas.getContext('2d');
   const scoreTickerTrack = document.getElementById('scoreTickerTrack');
@@ -1070,6 +1074,13 @@
   function syncViewState() {
     const inMenu = window.cargoShiftScene !== 'game';
     monitor.classList.toggle('in-menu', inMenu);
+    if (isTouchDevice) {
+      const state = window.cargoShiftState || 'menu';
+      const showPause = state === 'playing' || state === 'paused';
+      pauseBtn.hidden = !showPause;
+      pauseBtn.textContent = state === 'paused' ? '▶' : '⏸';
+      pauseBtn.setAttribute('aria-label', state === 'paused' ? 'Resume' : 'Pause');
+    }
     menuScreen.setAttribute('aria-hidden', inMenu ? 'false' : 'true');
     if (menuShipCtx) {
       drawMenuShip();

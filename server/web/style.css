@@ -192,6 +192,40 @@ canvas {
   user-select: none;
 }
 
+.pause-btn {
+  display: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 198, 109, 0.30);
+  border-radius: 6px;
+  background: rgba(11, 12, 11, 0.72);
+  color: var(--crt-fg);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  touch-action: manipulation;
+}
+
+.pause-btn:active {
+  background: rgba(255, 198, 109, 0.18);
+}
+
+.is-touch .pause-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.is-touch .pause-btn[hidden] {
+  display: none;
+}
+
 #loading {
   position: absolute;
   inset: 0;
@@ -294,9 +328,8 @@ canvas {
   text-transform: uppercase;
   color: var(--crt-fg);
   text-shadow:
-    0 0 10px var(--crt-glow),
-    0 0 30px var(--crt-glow),
-    0 0 60px rgba(0, 0, 0, 0.32);
+    0 0 8px var(--crt-glow),
+    0 0 18px var(--crt-glow);
 }
 
 .menu-subtitle {
@@ -845,9 +878,8 @@ canvas {
 
 .hdr-mode .menu-title {
   text-shadow:
-    0 0 14px var(--crt-glow),
-    0 0 36px var(--crt-glow),
-    0 0 72px var(--crt-fg);
+    0 0 10px var(--crt-glow),
+    0 0 24px var(--crt-glow);
 }
 
 .hdr-mode .start-btn {
@@ -904,9 +936,7 @@ canvas {
 }
 
 .is-touch .menu-title {
-  text-shadow:
-    0 0 6px var(--crt-glow),
-    0 0 14px var(--crt-glow);
+  text-shadow: 0 0 6px var(--crt-glow);
 }
 
 @media (max-width: 920px) {
@@ -943,25 +973,50 @@ canvas {
 @media (max-width: 640px) {
   body {
     padding: 0;
+    align-items: stretch;
   }
 
   .monitor {
-    width: 100vw;
-    min-height: 100vh;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
     border-radius: 0;
     border-left: 0;
     border-right: 0;
+    gap: 4px;
   }
 
   .toolbar {
     gap: 10px;
     align-items: flex-start;
+    flex-shrink: 0;
   }
 
   .toolbar-controls {
     gap: 8px;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .canvas-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  canvas {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .footer {
+    display: none;
   }
 
   .hall-entry,
@@ -972,9 +1027,5 @@ canvas {
   .hall-score,
   .hall-meta {
     grid-column: 2;
-  }
-
-  canvas {
-    width: min(100vw - 24px, calc(100vh * 822 / 740));
   }
 }
