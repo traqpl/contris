@@ -126,6 +126,16 @@ type Engine struct {
 	char    Character
 	captain Captain
 	keys    map[string]bool
+
+	// Touch input state
+	touchStartX    float64
+	touchStartY    float64
+	touchStartMs   float64
+	touchLastTapMs float64
+	touchLastTapX  float64
+	touchLastTapY  float64
+	touchSwipeCols int
+	touchIsDouble  bool
 }
 
 func (e *Engine) audioScene() string {

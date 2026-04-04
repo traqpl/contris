@@ -70,6 +70,7 @@ body {
   min-height: 100vh;
   font-family: var(--ui-font), sans-serif;
   padding: 10px;
+  overscroll-behavior: none;
 }
 
 /* ── monitor shell ────────────────────────────────────────────────────────── */
@@ -178,6 +179,7 @@ body {
   position: relative;
   z-index: 3;
   align-self: center;
+  touch-action: none;
 }
 
 canvas {
@@ -186,6 +188,8 @@ canvas {
   width: min(calc(99vw - 28px), calc(93vh * 822 / 740), 822px);
   aspect-ratio: 822 / 740;
   height: auto;
+  touch-action: none;
+  user-select: none;
 }
 
 #loading {
@@ -862,6 +866,41 @@ canvas {
   letter-spacing: 0.8px;
   position: relative;
   z-index: 3;
+}
+
+/* ── score modal mobile actions ───────────────────────────────────────────── */
+.score-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.score-action-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--panel-border-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--crt-fg);
+  font-family: var(--display-font), sans-serif;
+  font-size: 22px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: background 0.12s;
+}
+
+.score-action-btn:active {
+  background: rgba(255, 198, 109, 0.14);
+}
+
+.score-action-btn-skip {
+  color: var(--muted-copy);
+  border-color: var(--panel-border);
+}
+
+/* ── touch device overrides ───────────────────────────────────────────────── */
+.is-touch .score-modal-legend-kb {
+  display: none;
 }
 
 @media (max-width: 920px) {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>CARGO SHIFT</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
@@ -60,7 +60,7 @@
           <span>Dangerous goods explode</span>
         </div>
         <button id="startShiftBtn" class="start-btn" type="button" disabled>
-          <span class="start-btn-key">Press Space / Enter</span>
+          <span class="start-btn-key" id="startBtnKey">Press Space / Enter</span>
           <span class="start-btn-copy" id="startShiftCopy">Loading bridge systems</span>
         </button>
         <div class="menu-actions">
@@ -76,7 +76,7 @@
         <span>Fast run</span>
       </div>
 
-      <div class="menu-controls-line" aria-label="Controls summary">
+      <div class="menu-controls-line" id="menuControlsKeyboard" aria-label="Controls summary">
         <span><strong>Arrows</strong> move</span>
         <span><strong>Up</strong> rotate</span>
         <span><strong>Down</strong> drop</span>
@@ -85,6 +85,11 @@
         <span><strong>S</strong> sfx</span>
         <span><strong>T</strong> theme</span>
         <span><strong>H</strong> hall</span>
+      </div>
+      <div class="menu-controls-line menu-controls-mobile" id="menuControlsMobile" aria-label="Touch controls summary" hidden>
+        <span><strong>Tap</strong> rotate</span>
+        <span><strong>Swipe</strong> move left / right</span>
+        <span><strong>Double tap</strong> drop</span>
       </div>
 
       <div class="menu-dock" aria-hidden="true">
@@ -140,7 +145,11 @@
     </div>
     <input id="nickInput" class="score-modal-input-hidden" type="text" maxlength="3" autocomplete="off" spellcheck="false">
     <p class="score-modal-status" id="scoreStatus">Enter a short tag for the leaderboard.</p>
-    <p class="score-modal-legend"><strong>Enter</strong> save score <span>·</span> <strong>Esc</strong> skip</p>
+    <p class="score-modal-legend score-modal-legend-kb"><strong>Enter</strong> save score <span>·</span> <strong>Esc</strong> skip</p>
+    <div class="score-modal-actions" id="scoreModalActions" hidden>
+      <button id="scoreSubmitBtn" class="score-action-btn score-action-btn-save" type="button">Save score</button>
+      <button id="scoreSkipBtn" class="score-action-btn score-action-btn-skip" type="button">Skip</button>
+    </div>
   </div>
 </div>
 
@@ -627,6 +636,11 @@
   const backToMenuBtn = document.getElementById('backToMenuBtn');
   const startShiftCopy = document.getElementById('startShiftCopy');
   const menuHint = document.getElementById('menuHint');
+  const isTouchDevice = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+  if (isTouchDevice) {
+    document.body.classList.add('is-touch');
+    monitor.classList.add('is-touch');
+  }
   const menuShipCanvas = document.getElementById('menuShipCanvas');
   const menuShipCtx = menuShipCanvas.getContext('2d');
   const scoreTickerTrack = document.getElementById('scoreTickerTrack');
@@ -1089,7 +1103,17 @@
     .then(result => {
       startShiftBtn.disabled = false;
       startShiftCopy.textContent = 'Start shift';
-      menuHint.textContent = 'Keyboard-first by design. Press Space or Enter, or use the button if you prefer.';
+      if (isTouchDevice) {
+        document.getElementById('startBtnKey').textContent = 'Tap to start';
+        menuHint.textContent = 'Tap to rotate · Swipe left/right to move · Double tap to drop.';
+        document.getElementById('menuControlsKeyboard').hidden = true;
+        document.getElementById('menuControlsMobile').hidden = false;
+        document.getElementById('scoreModalActions').hidden = false;
+        document.getElementById('scoreSubmitBtn').addEventListener('click', submitScore);
+        document.getElementById('scoreSkipBtn').addEventListener('click', () => closeScoreModal('hall'));
+      } else {
+        menuHint.textContent = 'Keyboard-first by design. Press Space or Enter, or use the button if you prefer.';
+      }
       document.getElementById('loading').style.display = 'none';
       go.run(result.instance);
     })

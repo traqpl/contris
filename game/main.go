@@ -12,6 +12,7 @@ func main() {
 	canvas := js.Global().Get("document").Call("getElementById", "gameCanvas")
 	engine = NewEngine(canvas)
 	engine.registerInput()
+	engine.registerTouchInput()
 	js.Global().Set("cargoShiftScene", engine.audioScene())
 	js.Global().Set("cargoShiftState", engine.stateName())
 	js.Global().Set("cargoShiftScore", engine.score)
