@@ -120,6 +120,7 @@ func (e *Engine) hardDrop() {
 		e.cur.R++
 	}
 	e.lock()
+	e.dropTimer = 0
 }
 
 func (e *Engine) lock() {

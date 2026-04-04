@@ -133,6 +133,13 @@
 <audio id="bgMusicA" preload="auto"></audio>
 <audio id="bgMusicB" preload="auto"></audio>
 
+<div class="landscape-block" id="landscapeBlock" hidden>
+  <div class="landscape-block-inner">
+    <span class="landscape-block-icon">⟳</span>
+    <p class="landscape-block-msg">Rotate to portrait</p>
+  </div>
+</div>
+
 <div class="score-modal" id="scoreModal" hidden>
   <div class="score-modal-card" role="dialog" aria-modal="true" aria-labelledby="scoreModalTitle">
     <p class="score-modal-kicker">Hall of Fame</p>
@@ -645,6 +652,24 @@
   }
 
   pauseBtn.addEventListener('click', () => dispatchGameKey('KeyP'));
+
+  const landscapeBlock = document.getElementById('landscapeBlock');
+  if (isTouchDevice) {
+    const landscapeQuery = window.matchMedia('(orientation: landscape)');
+    function handleOrientation() {
+      if (!landscapeQuery.matches) {
+        landscapeBlock.hidden = true;
+        return;
+      }
+      const state = window.cargoShiftState || 'menu';
+      if (state === 'playing') {
+        dispatchGameKey('KeyP');
+      }
+      landscapeBlock.hidden = false;
+    }
+    landscapeQuery.addEventListener('change', handleOrientation);
+    handleOrientation();
+  }
   const menuShipCanvas = document.getElementById('menuShipCanvas');
   const menuShipCtx = menuShipCanvas.getContext('2d');
   const scoreTickerTrack = document.getElementById('scoreTickerTrack');

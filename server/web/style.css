@@ -327,9 +327,7 @@ canvas {
   letter-spacing: 3px;
   text-transform: uppercase;
   color: var(--crt-fg);
-  text-shadow:
-    0 0 8px var(--crt-glow),
-    0 0 18px var(--crt-glow);
+  text-shadow: 0 0 6px var(--crt-glow);
 }
 
 .menu-subtitle {
@@ -877,9 +875,7 @@ canvas {
 }
 
 .hdr-mode .menu-title {
-  text-shadow:
-    0 0 10px var(--crt-glow),
-    0 0 24px var(--crt-glow);
+  text-shadow: 0 0 8px var(--crt-glow), 0 0 16px var(--crt-glow);
 }
 
 .hdr-mode .start-btn {
@@ -930,6 +926,47 @@ canvas {
   border-color: var(--panel-border);
 }
 
+/* ── landscape block overlay ─────────────────────────────────────────────── */
+.landscape-block {
+  display: none;
+}
+
+.landscape-block[hidden] {
+  display: none !important;
+}
+
+.is-touch .landscape-block:not([hidden]) {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--crt-bg);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.landscape-block-icon {
+  font-size: 64px;
+  animation: rotate-hint 2s ease-in-out infinite;
+}
+
+.landscape-block-msg {
+  color: var(--crt-fg);
+  font-family: var(--display-font), sans-serif;
+  font-size: 28px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px var(--crt-glow);
+}
+
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  40% { transform: rotate(90deg); }
+  60% { transform: rotate(90deg); }
+}
+
 /* ── touch device overrides ───────────────────────────────────────────────── */
 .is-touch .score-modal-legend-kb {
   display: none;
@@ -974,6 +1011,18 @@ canvas {
   body {
     padding: 0;
     align-items: stretch;
+  }
+
+  .score-modal {
+    align-items: flex-start;
+    padding: 16px 0 0;
+  }
+
+  .score-modal-card {
+    width: 100%;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
   }
 
   .monitor {
