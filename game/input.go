@@ -61,9 +61,10 @@ func (e *Engine) registerTouchInput() {
 		e.touchSwipeCols = 0
 		e.touchSwiped = false
 		e.touchLongPressTriggered = false
+		e.touchStartPid = e.pidCount
 
 		e.touchLongPressTimer = js.Global().Call("setTimeout", js.FuncOf(func(_ js.Value, _ []js.Value) any {
-			if e.touchLongPressTriggered {
+			if e.touchLongPressTriggered || e.pidCount != e.touchStartPid {
 				return nil
 			}
 			e.touchLongPressTriggered = true

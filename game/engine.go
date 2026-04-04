@@ -135,6 +135,7 @@ type Engine struct {
 	touchSwiped             bool
 	touchLongPressTimer     js.Value
 	touchLongPressTriggered bool
+	touchStartPid           int
 }
 
 func (e *Engine) audioScene() string {
