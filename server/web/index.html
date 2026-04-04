@@ -534,60 +534,80 @@
 
   startMusic();
 
-  // ── sound effects ─────────────────────────────────────────────────────────
-  const explodeSfx = new Audio('explode.mp3');
-  explodeSfx.preload = 'auto';
-  const glassKnockSfx = new Audio('glass-knock.mp3');
-  glassKnockSfx.preload = 'auto';
-  const metalHitSfx = new Audio('metal-hit.mp3');
-  metalHitSfx.preload = 'auto';
+  // ── sound effects (Web Audio API — zero latency) ──────────────────────────
+  let sfxCtx = null;
+  const sfxBufs = {};
 
-  function playSfx(audio, volume = gameplaySfxVolume) {
+  async function initSfxContext() {
+    if (sfxCtx) return;
+    sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const files = { metalHit: 'metal-hit.mp3', explode: 'explode.mp3', glassKnock: 'glass-knock.mp3' };
+    await Promise.all(Object.entries(files).map(async ([key, url]) => {
+      try {
+        const res = await fetch(url);
+        const buf = await res.arrayBuffer();
+        sfxBufs[key] = await sfxCtx.decodeAudioData(buf);
+      } catch (_) {}
+    }));
+  }
+
+  function playBuf(buf, volume, echoes = []) {
+    if (sfxMuted || !sfxCtx || !buf) return;
+    const now = sfxCtx.currentTime;
+    const schedule = [{ t: 0, v: volume }, ...echoes.map(e => ({ t: e.delayMs / 1000, v: volume * e.gain }))];
+    schedule.forEach(({ t, v }) => {
+      const src = sfxCtx.createBufferSource();
+      src.buffer = buf;
+      const gain = sfxCtx.createGain();
+      gain.gain.value = v;
+      src.connect(gain);
+      gain.connect(sfxCtx.destination);
+      src.start(now + t);
+    });
+  }
+
+  // Fallback for before Web Audio is ready
+  function playSfxFallback(url, volume) {
     if (sfxMuted) return;
-    const sfx = audio.cloneNode();
+    const sfx = new Audio(url);
     sfx.volume = volume;
     sfx.play().catch(() => {});
   }
 
-  function playEchoSfx(audio, {
-    volume = gameplaySfxVolume,
-    echoes = [],
-  } = {}) {
-    playSfx(audio, volume);
-    echoes.forEach(({ delayMs, gain }) => {
-      window.setTimeout(() => {
-        if (sfxMuted) return;
-        playSfx(audio, volume * gain);
-      }, delayMs);
-    });
-  }
-
   window.playExplodeSound = function () {
-    playEchoSfx(explodeSfx, {
-      volume: gameplaySfxVolume,
-      echoes: [
+    if (sfxBufs.explode) {
+      const mobile = navigator.maxTouchPoints > 0;
+      playBuf(sfxBufs.explode, gameplaySfxVolume, mobile ? [] : [
         { delayMs: 120, gain: 0.45 },
         { delayMs: 240, gain: 0.22 },
-      ],
-    });
+      ]);
+    } else {
+      playSfxFallback('explode.mp3', gameplaySfxVolume);
+    }
   };
 
   window.playMenuKnockSound = function () {
-    playSfx(glassKnockSfx, menuUiSfxVolume);
+    if (sfxBufs.glassKnock) {
+      playBuf(sfxBufs.glassKnock, menuUiSfxVolume);
+    } else {
+      playSfxFallback('glass-knock.mp3', menuUiSfxVolume);
+    }
   };
 
   window.playMetalHitSound = function () {
-    const mobile = navigator.maxTouchPoints > 0;
-    playEchoSfx(metalHitSfx, {
-      volume: gameplaySfxVolume,
-      echoes: mobile ? [] : [
+    if (sfxBufs.metalHit) {
+      const mobile = navigator.maxTouchPoints > 0;
+      playBuf(sfxBufs.metalHit, gameplaySfxVolume, mobile ? [] : [
         { delayMs: 90, gain: 0.35 },
         { delayMs: 180, gain: 0.16 },
-      ],
-    });
+      ]);
+    } else {
+      playSfxFallback('metal-hit.mp3', gameplaySfxVolume);
+    }
   };
 
   function onFirstInteraction() {
+    initSfxContext();
     startMusic();
     if (musicStarted) {
       document.removeEventListener('keydown', onFirstInteraction);
