@@ -553,6 +553,7 @@
 
   function playBuf(buf, volume, echoes = []) {
     if (sfxMuted || !sfxCtx || !buf) return;
+    if (sfxCtx.state === 'suspended') sfxCtx.resume();
     const now = sfxCtx.currentTime;
     const schedule = [{ t: 0, v: volume }, ...echoes.map(e => ({ t: e.delayMs / 1000, v: volume * e.gain }))];
     schedule.forEach(({ t, v }) => {
@@ -562,6 +563,7 @@
       gain.gain.value = v;
       src.connect(gain);
       gain.connect(sfxCtx.destination);
+      src.addEventListener('ended', () => { src.disconnect(); gain.disconnect(); }, { once: true });
       src.start(now + t);
     });
   }
