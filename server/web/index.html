@@ -537,6 +537,12 @@
   // ── sound effects (Web Audio API — zero latency) ──────────────────────────
   let sfxCtx = null;
   const sfxBufs = {};
+  const sfxRawBufs = {};
+  // Pre-fetch SFX raw bytes immediately (no user gesture needed for fetch).
+  // By the time the user interacts, data is ready for near-instant decoding.
+  fetch('metal-hit.mp3').then(r => r.arrayBuffer()).then(b => { sfxRawBufs.metalHit = b; }).catch(() => {});
+  fetch('explode.mp3').then(r => r.arrayBuffer()).then(b => { sfxRawBufs.explode = b; }).catch(() => {});
+  fetch('glass-knock.mp3').then(r => r.arrayBuffer()).then(b => { sfxRawBufs.glassKnock = b; }).catch(() => {});
 
   function decodeAudioData(ctx, arrayBuffer) {
     return new Promise((resolve, reject) => {
@@ -561,9 +567,8 @@
     const files = { metalHit: 'metal-hit.mp3', explode: 'explode.mp3', glassKnock: 'glass-knock.mp3' };
     await Promise.all(Object.entries(files).map(async ([key, url]) => {
       try {
-        const res = await fetch(url);
-        const buf = await res.arrayBuffer();
-        sfxBufs[key] = await decodeAudioData(sfxCtx, buf);
+        const rawBuf = sfxRawBufs[key] || await fetch(url).then(r => r.arrayBuffer());
+        sfxBufs[key] = await decodeAudioData(sfxCtx, rawBuf);
       } catch (_) {}
     }));
   }
